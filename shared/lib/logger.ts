@@ -6,6 +6,7 @@ export interface LogEntry {
   category: string;
   message: string;
   data?: any;
+  stack?: string;
 }
 
 type LogListener = (entry: LogEntry) => void;
@@ -73,7 +74,7 @@ class AetherLogger {
     return `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}]: ${entry.message}`;
   }
 
-  public log(level: LogLevel, category: string, message: string, data?: any) {
+  public log(level: LogLevel, category: string, message: string, data?: any, stack?: string) {
     // Only log if Dev or Debug is enabled
     if (!this.isDev && !this.isDebugEnabled && level !== 'error') return;
 
@@ -84,16 +85,21 @@ class AetherLogger {
       level,
       category,
       message,
-      data: safeData
+      data: safeData,
+      stack,
     };
 
     // Console Output (use original data for browser console as it handles objs well)
     const formatted = this.format(entry);
+    const consoleArgs = [formatted];
+    if (data) consoleArgs.push(data);
+    if (stack) consoleArgs.push(`\n${stack}`);
+
     switch (level) {
-      case 'info': console.info(formatted, data || ''); break;
-      case 'warn': console.warn(formatted, data || ''); break;
-      case 'error': console.error(formatted, data || ''); break;
-      case 'debug': console.debug(formatted, data || ''); break;
+      case 'info': console.info(...consoleArgs); break;
+      case 'warn': console.warn(...consoleArgs); break;
+      case 'error': console.error(...consoleArgs); break;
+      case 'debug': console.debug(...consoleArgs); break;
     }
 
     // In-memory storage
@@ -102,7 +108,7 @@ class AetherLogger {
 
   public info(category: string, message: string, data?: any) { this.log('info', category, message, data); }
   public warn(category: string, message: string, data?: any) { this.log('warn', category, message, data); }
-  public error(category: string, message: string, data?: any) { this.log('error', category, message, data); }
+  public error(category: string, message: string, data?: any, stack?: string) { this.log('error', category, message, data, stack); }
   public debug(category: string, message: string, data?: any) { this.log('debug', category, message, data); }
   
   public getLogs(): LogEntry[] {

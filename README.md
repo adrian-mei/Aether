@@ -16,6 +16,7 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 *   **Framework**: Next.js 16 (App Router)
 *   **Language**: TypeScript / React 19
 *   **Styling**: Tailwind CSS 4
+*   **API**: Next.js App Router (`app/api`)
 *   **AI/Streaming**: Vercel AI SDK 5.0 + Google Gemini
 *   **State Management**: React Hooks (Custom `useAetherVoice`)
 

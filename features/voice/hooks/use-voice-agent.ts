@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { logger } from '../lib/logger';
+import { logger } from '@/shared/lib/logger';
 
-type AetherState = 'idle' | 'listening' | 'processing' | 'speaking';
+export type VoiceAgentState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
 
-export function useAetherVoice(
+export function useVoiceAgent(
   onInputComplete: (text: string) => void
 ) {
-  const [state, setState] = useState<AetherState>('idle');
+  const [state, setState] = useState<VoiceAgentState>('idle');
   const [recognition, setRecognition] = useState<any>(null);
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
@@ -35,13 +35,16 @@ export function useAetherVoice(
       };
 
       rec.onerror = (event: any) => {
-        if (event.error === 'no-speech' || event.error === 'aborted') {
+        if (event.error === 'not-allowed') {
+          setState('permission-denied');
+          logger.error('VOICE', 'Microphone permission denied', { error: event.error }, new Error().stack);
+        } else if (event.error === 'no-speech' || event.error === 'aborted') {
           logger.info('VOICE', 'Speech recognition stopped', { reason: event.error });
         } else {
           logger.error('VOICE', 'Speech recognition error', { 
             error: event.error, 
             message: event.message 
-          });
+          }, new Error().stack);
         }
       };
 
@@ -77,6 +80,24 @@ export function useAetherVoice(
     if (synth?.speaking) {
         synth.cancel();
     }
+    setState('idle');
+  }, [recognition, synth]);
+
+  const toggleMute = useCallback(() => {
+    if (state === 'muted') {
+      setState('idle');
+      startListening();
+    } else {
+      recognition?.stop();
+      synth?.cancel();
+      setState('muted');
+    }
+  }, [state, recognition, synth, startListening]);
+
+  const reset = useCallback(() => {
+    logger.info('VOICE', 'Resetting state');
+    if (synth?.speaking) synth.cancel();
+    recognition?.stop();
     setState('idle');
   }, [recognition, synth]);
 
@@ -146,6 +167,9 @@ export function useAetherVoice(
     state,
     startListening,
     stopListening,
-    speak
+    reset,
+    speak,
+    toggleMute,
+    setState
   };
 }
