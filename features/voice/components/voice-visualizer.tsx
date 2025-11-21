@@ -1,72 +1,134 @@
 'use client';
 
-import { Mic, MicOff, Activity, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { VoiceAgentState } from '../hooks/use-voice-agent';
 
 interface VisualizerProps {
   state: VoiceAgentState;
+  size?: number;
+  isInteractive?: boolean;
+  onClick?: () => void;
 }
 
-export default function VoiceVisualizer({ state }: VisualizerProps) {
+export default function VoiceVisualizer({ state, size = 240, isInteractive = false, onClick }: VisualizerProps) {
+  // Minimalist color themes
+  const getStateStyles = () => {
+    switch (state) {
+      case 'speaking':
+        return {
+          bg: 'bg-blue-500',
+          glow: 'shadow-[0_0_60px_rgba(59,130,246,0.6)]',
+          scale: 'scale-110',
+        };
+      case 'listening':
+        return {
+          bg: 'bg-emerald-500',
+          glow: 'shadow-[0_0_60px_rgba(16,185,129,0.6)]',
+          scale: 'scale-105',
+        };
+      case 'processing':
+        return {
+          bg: 'bg-amber-500',
+          glow: 'shadow-[0_0_60px_rgba(245,158,11,0.6)]',
+          scale: 'scale-100',
+        };
+      case 'muted':
+        return {
+          bg: 'bg-slate-500',
+          glow: 'shadow-[0_0_40px_rgba(100,116,139,0.4)]',
+          scale: 'scale-100',
+        };
+      case 'idle':
+        return {
+          bg: 'bg-indigo-500',
+          glow: 'shadow-[0_0_50px_rgba(99,102,241,0.5)]',
+          scale: 'scale-100',
+        };
+      default:
+        return {
+          bg: 'bg-slate-700',
+          glow: 'shadow-[0_0_30px_rgba(71,85,105,0.3)]',
+          scale: 'scale-95',
+        };
+    }
+  };
+
+  const styles = getStateStyles();
+  const buttonSize = size * 0.83; // 200px for a 240px container
+
+  const containerStyle = {
+    width: size,
+    height: size,
+    minWidth: size,
+    minHeight: size,
+    maxWidth: size,
+    maxHeight: size,
+  };
+
+  const buttonStyle = {
+    width: buttonSize,
+    height: buttonSize,
+  };
+
   return (
-    <div className="relative flex items-center justify-center w-64 h-64">
-      
-      {/* --- BACKGROUND LAYERS (The "Aura") --- */}
-      
-      {/* Speaking: The Breathing Aura */}
-      {state === 'speaking' && (
-        <>
-          <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-xl animate-breathe" />
-          <div className="absolute inset-4 bg-indigo-400/20 rounded-full blur-lg animate-breathe delay-75" />
-        </>
+    <div className="relative flex items-center justify-center flex-none" style={containerStyle}>
+
+      {/* Subtle background glow */}
+      {state !== 'idle' && state !== 'permission-denied' && (
+        <div
+          className={`absolute inset-0 rounded-full ${styles.bg} opacity-20 blur-3xl transition-opacity duration-700`}
+        />
       )}
 
-      {/* Listening: The Ripple Effect */}
-      {state === 'listening' && (
-        <>
-           {/* Ring 1 */}
-          <div className="absolute w-32 h-32 border border-emerald-500/30 rounded-full animate-ripple" />
-           {/* Ring 2 (Delayed) */}
-          <div className="absolute w-32 h-32 border border-emerald-500/20 rounded-full animate-ripple [animation-delay:1s]" />
-        </>
-      )}
-
-      {/* Processing: The Inner Glow */}
-      {state === 'processing' && (
-        <div className="absolute inset-8 bg-amber-500/10 rounded-full blur-md animate-pulse" />
-      )}
-
-
-      {/* --- CORE CIRCLE (The "Body") --- */}
-      <div 
+      {/* Main orb */}
+      <button
+        onClick={onClick}
+        disabled={!isInteractive}
         className={`
-          relative z-10 flex items-center justify-center w-32 h-32 rounded-full 
-          shadow-2xl transition-all duration-700 ease-in-out
-          ${state === 'speaking' ? 'bg-indigo-600 shadow-indigo-500/50 scale-110' :
-            state === 'listening' ? 'bg-emerald-600 shadow-emerald-500/50' :
-            state === 'processing' ? 'bg-amber-600 shadow-amber-500/50 scale-95' :
-            state === 'muted' ? 'bg-yellow-600 shadow-yellow-500/50' :
-            'bg-slate-700 shadow-slate-900/50 scale-100'}
+          relative flex items-center justify-center
+          rounded-full
+          ${styles.bg} ${styles.glow}
+          transition-all duration-700 ease-out
+          ${styles.scale}
+          ${(state === 'speaking' || state === 'idle') ? 'animate-pulse-gentle' : ''}
+          ${!isInteractive ? 'opacity-50 cursor-not-allowed' : 'opacity-100 cursor-pointer hover:scale-105 active:scale-100'}
         `}
+        style={buttonStyle}
+        aria-label="Toggle voice session"
       >
-        {/* Icons with smooth transitions */}
-        <div className="text-white transition-all duration-500">
-          {state === 'speaking' && <Sparkles className="w-12 h-12 animate-pulse" />}
-          {state === 'listening' && <Mic className="w-12 h-12" />}
-          {state === 'processing' && <Activity className="w-12 h-12 animate-gentle-spin" />}
-          {(state === 'idle' || state === 'muted') && <MicOff className="w-12 h-12 opacity-50" />}
-        </div>
-      </div>
+        {/* Glass reflection for depth */}
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-white/20 via-transparent to-transparent" />
 
-      {/* --- STATUS TEXT --- */}
+        {/* Icon */}
+        <div className="relative z-10 text-white">
+          {(state === 'listening' || state === 'idle') && <Mic className="w-16 h-16" strokeWidth={1.5} />}
+          {state === 'processing' && <Loader2 className="w-16 h-16 animate-spin" strokeWidth={1.5} />}
+          {(state === 'muted' || state === 'permission-denied') && (
+            <MicOff className="w-16 h-16" strokeWidth={1.5} />
+          )}
+          {state === 'speaking' && (
+            <div className="flex gap-1 items-center">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-1.5 h-8 bg-white rounded-full animate-wave"
+                  style={{ animationDelay: `${i * 0.1}s` }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </button>
+
+      {/* Status text */}
       <div className="absolute -bottom-12 w-full text-center">
-        <p className="text-indigo-200/80 text-sm font-light tracking-widest uppercase animate-pulse">
-          {state === 'speaking' && "Aether is speaking"}
-          {state === 'listening' && "Listening..."}
-          {state === 'processing' && "Thinking"}
-          {state === 'idle' && "Paused"}
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+          {state === 'speaking' && "Speaking"}
+          {state === 'listening' && "Listening"}
+          {state === 'processing' && "Processing"}
+          {state === 'idle' && "Start Conversation"}
           {state === 'muted' && "Muted"}
-          {state === 'permission-denied' && "Microphone permission denied"}
+          {state === 'permission-denied' && "Permission Denied"}
         </p>
       </div>
     </div>
