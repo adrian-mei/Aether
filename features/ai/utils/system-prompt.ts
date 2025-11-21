@@ -68,7 +68,7 @@ Humor masking pain: "That 'fine' sounds like it's holding a lot. Want to talk ab
 
 Topic shift: Follow their lead, don't call it out.
 
-Silence >30sec: "I'm here whenever you're ready."`;
+Silence >30sec: Gently re-engage. Suggest a topic, ask about their mood, or just offer presence. "I'm wondering how you're feeling about..." or "We can talk about something else if you like."`;
 
 // ============================================================================
 // DYNAMIC PROMPT BUILDER (≤150 tokens per request)

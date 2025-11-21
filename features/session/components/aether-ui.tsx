@@ -13,6 +13,7 @@ interface AetherUIProps {
   voiceState: VoiceAgentState;
   permissionStatus: PermissionStatus;
   sessionStatus: SessionStatus;
+  currentAssistantMessage?: string;
   onStartSession: () => void;
   onToggleListening: () => void;
   onBypass: (code: string) => Promise<boolean>;
@@ -45,6 +46,7 @@ export const AetherUI = ({
   voiceState, 
   permissionStatus, 
   sessionStatus,
+  currentAssistantMessage,
   onStartSession, 
   onToggleListening,
   onBypass
@@ -220,6 +222,12 @@ export const AetherUI = ({
       muted: { text: 'Paused', subtext: 'Tap to resume' },
       error: { text: 'Connection Issue', subtext: 'Tap to retry' },
     };
+
+    // Override for speaking state if we have a message
+    if (uiVoiceState === 'speaking' && currentAssistantMessage) {
+        return { text: currentAssistantMessage, subtext: 'Aether' };
+    }
+
     return messages[uiVoiceState] || messages.idle;
   };
 

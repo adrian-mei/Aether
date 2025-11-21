@@ -15,6 +15,7 @@ export function SessionContainer() {
         voiceState={state.voiceState}
         permissionStatus={state.permissionStatus}
         sessionStatus={state.status}
+        currentAssistantMessage={state.currentAssistantMessage}
         onStartSession={actions.handleStartSession}
         onToggleListening={actions.toggleListening}
         onBypass={actions.verifyAccessCode}

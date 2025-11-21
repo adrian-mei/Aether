@@ -1,4 +1,5 @@
 import { logger } from '@/shared/lib/logger';
+import { audioPlayer } from '@/features/voice/utils/audio-player';
 
 export interface KokoroVoice {
   id: string;
@@ -36,7 +37,6 @@ export class KokoroService {
   private static instance: KokoroService;
   private worker: Worker | null = null;
   private modelId = "onnx-community/Kokoro-82M-v1.0-ONNX";
-  private audioContext: AudioContext | null = null;
   private isInitializing = false;
   private isReady = false;
   private initializationPromise: Promise<void> | null = null;
@@ -44,7 +44,7 @@ export class KokoroService {
   // Promise resolvers for active requests
   private initPromise: { resolve: () => void; reject: (err: unknown) => void } | null = null;
   private generatePromise: { 
-      resolve: (result?: AudioGenerationResult | void) => void; 
+      resolve: (result?: AudioGenerationResult | Promise<void> | void) => void; 
       reject: (err: unknown) => void;
       onStart?: () => void;
       returnAudio?: boolean;
@@ -63,6 +63,18 @@ export class KokoroService {
     return KOKORO_VOICES;
   }
 
+  /**
+   * Set a custom worker instance (mostly for testing).
+   */
+  public setWorker(worker: Worker) {
+    this.worker = worker;
+    this.worker.onmessage = this.handleWorkerMessage.bind(this);
+    this.worker.onerror = (err) => {
+      logger.error('KOKORO', 'Worker error', err);
+      this.handleError(err.message);
+    };
+  }
+
   public async initialize(): Promise<void> {
     if (this.isReady) return Promise.resolve();
     if (this.initializationPromise) return this.initializationPromise;
@@ -74,13 +86,15 @@ export class KokoroService {
       this.initPromise = { resolve, reject };
 
       try {
-        this.worker = new Worker(new URL('../workers/kokoro.worker.ts', import.meta.url), { type: 'module' });
-        
-        this.worker.onmessage = this.handleWorkerMessage.bind(this);
-        this.worker.onerror = (err) => {
-            logger.error('KOKORO', 'Worker error', err);
-            this.handleError(err.message);
-        };
+        if (!this.worker) {
+          this.worker = new Worker(new URL('../workers/kokoro.worker.ts', import.meta.url), { type: 'module' });
+          
+          this.worker.onmessage = this.handleWorkerMessage.bind(this);
+          this.worker.onerror = (err) => {
+              logger.error('KOKORO', 'Worker error', err);
+              this.handleError(err.message);
+          };
+        }
 
         this.worker.postMessage({ type: 'init', modelId: this.modelId });
       } catch (error: unknown) {
@@ -121,10 +135,18 @@ export class KokoroService {
                 if (this.generatePromise.onStart) {
                     this.generatePromise.onStart();
                 }
-                this.playAudio(audio, sampleRate).then(() => {
-                    this.generatePromise?.resolve();
-                    this.generatePromise = null;
+                // Hand off to audio player (which queues it) and resolve immediately
+                // so the next sentence can be generated in parallel.
+                // We capture the playback promise to return it.
+                const playbackPromise = this.playAudio(audio, sampleRate);
+                
+                // Catch errors locally to prevent unhandled rejections if caller ignores promise
+                playbackPromise.catch(err => {
+                    logger.error('KOKORO', 'Playback queue failed', err);
                 });
+                
+                this.generatePromise?.resolve(playbackPromise);
+                this.generatePromise = null;
             }
         }
     } else if (type === 'error') {
@@ -154,8 +176,9 @@ export class KokoroService {
 
   /**
    * Generates and plays audio immediately.
+   * Returns a promise that resolves to a Playback Promise (which resolves when audio finishes).
    */
-  public async speak(text: string, voiceId?: string, onPlaybackStart?: () => void): Promise<void> {
+  public async speak(text: string, voiceId?: string, onPlaybackStart?: () => void): Promise<Promise<void>> {
     try {
       if (!this.isReady) {
         await this.initialize();
@@ -168,7 +191,7 @@ export class KokoroService {
       
       return new Promise((resolve, reject) => {
           this.generatePromise = { 
-            resolve: () => resolve(), 
+            resolve: (result) => resolve(result as Promise<void>), 
             reject, 
             onStart: onPlaybackStart, 
             returnAudio: false 
@@ -212,25 +235,7 @@ export class KokoroService {
   }
 
   private async playAudio(audioData: Float32Array, sampleRate: number): Promise<void> {
-    if (!this.audioContext) {
-      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    }
-
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
-    }
-
-    const buffer = this.audioContext.createBuffer(1, audioData.length, sampleRate);
-    buffer.copyToChannel(new Float32Array(audioData), 0);
-
-    const source = this.audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(this.audioContext.destination);
-    
-    return new Promise((resolve) => {
-      source.onended = () => resolve();
-      source.start();
-    });
+    return audioPlayer.play(audioData, sampleRate);
   }
 
   /**
@@ -241,11 +246,7 @@ export class KokoroService {
   }
 
   public stop(): void {
-    if (this.audioContext) {
-        this.audioContext.close().then(() => {
-            this.audioContext = null;
-        });
-    }
+    audioPlayer.stop();
     // We don't terminate the worker, just stop audio
   }
 }

@@ -43,7 +43,8 @@ export type VoiceAgentState = 'idle' | 'listening' | 'processing' | 'speaking' |
 export type Engine = 'web-speech' | 'kokoro';
 
 export function useVoiceAgent(
-  onInputComplete: (text: string) => void
+  onInputComplete: (text: string) => void,
+  onSilence?: () => void
 ) {
   const [state, setState] = useState<VoiceAgentState>('idle');
   const stateRef = useRef<VoiceAgentState>(state);
@@ -171,9 +172,10 @@ export function useVoiceAgent(
              // We should reset to idle. If a result came in, state would be 'processing'.
              setState('idle');
         } else if (retryCount.current > MAX_RETRIES) {
-             logger.info('VOICE', 'Max retries reached, stopping');
+             logger.info('VOICE', 'Max retries reached, triggering silence handler');
              retryCount.current = 0;
              setState('idle');
+             if (onSilence) onSilence();
         }
       };
 
@@ -253,11 +255,19 @@ export function useVoiceAgent(
         // Fixed to Heart
         const voiceId = 'af_heart';
         
-        await kokoroService.speak(
+        // Get the playback promise (resolves when audio finishes playing)
+        // kokoroService.speak resolves immediately after queuing (pipeline parallelism)
+        const playbackPromise = await kokoroService.speak(
             text, 
             voiceId,
             () => setState('speaking') // Switch to speaking wave on audio start
         );
+        
+        // If we need to autoResume (last chunk), we MUST wait for playback to finish.
+        // If not (intermediate chunk), we return immediately to allow next generation.
+        if (options.autoResume && playbackPromise) {
+            await playbackPromise;
+        }
         
         // On finish
         if (stateRef.current !== 'muted') {

@@ -6,7 +6,7 @@ import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { logger } from '@/shared/lib/logger';
 import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
-import { useVoiceFillers } from '@/features/voice/hooks/use-voice-fillers';
+import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
 
 export type SessionStatus = 'initializing' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
@@ -19,89 +19,22 @@ export function useSessionManager() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
+  const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
   
   const historyRef = useRef<ChatMessage[]>([]);
   const speakRef = useRef<(text: string, options?: { autoResume?: boolean }) => Promise<void>>(async () => {});
   const resetRef = useRef<() => void>(() => {});
+  const isProcessingRef = useRef(false);
 
-  // Voice Fillers
-  const { isReady: isFillersReady, generateFillers, playRandomFiller } = useVoiceFillers();
-
-  // Streaming State
-  const bufferRef = useRef<string>('');
-  const queueRef = useRef<string[]>([]);
-  const isSpeakingRef = useRef<boolean>(false);
-  const isStreamActiveRef = useRef<boolean>(false);
-  const processQueueRef = useRef<() => Promise<void>>(async () => {});
-
-  const processQueue = useCallback(async () => {
-    if (isSpeakingRef.current) return;
-
-    if (queueRef.current.length === 0) {
-        if (!isStreamActiveRef.current && bufferRef.current.trim()) {
-             // Flush remainder
-             const text = bufferRef.current.trim();
-             bufferRef.current = '';
-             isSpeakingRef.current = true;
-             await speakRef.current(text, { autoResume: true });
-             isSpeakingRef.current = false;
-        }
-        return;
+  // Message Queue for Streaming
+  const { handleChunk, startStream, endStream } = useMessageQueue({
+    onSpeak: async (text, options) => {
+      setCurrentAssistantMessage(text);
+      await speakRef.current(text, options);
     }
-
-    isSpeakingRef.current = true;
-    const text = queueRef.current.shift()!;
-    
-    // Determine if this is the absolute last chunk
-    const isLast = !isStreamActiveRef.current && queueRef.current.length === 0 && !bufferRef.current.trim();
-    
-    await speakRef.current(text, { autoResume: isLast });
-    
-    isSpeakingRef.current = false;
-    processQueueRef.current();
-  }, []);
-
-  useEffect(() => {
-    processQueueRef.current = processQueue;
-  }, [processQueue]);
-
-  const handleChunk = useCallback((chunk: string) => {
-    bufferRef.current += chunk;
-    
-    // Split into sentences using a simple heuristic
-    // Match anything ending in . ! ? followed by whitespace or EOF
-    // Note: This is imperfect (e.g. "Mr. Smith") but fast.
-    const splitRegex = /([.!?]+["']?(?:\s+|$))/;
-    const parts = bufferRef.current.split(splitRegex);
-    
-    // parts will look like ["Hello", ". ", "How are you", "? ", ""]
-    // We want to combine delimiter with previous part
-    
-    let newBuffer = '';
-    
-    for (let i = 0; i < parts.length - 1; i += 2) {
-        const sentence = parts[i] + (parts[i+1] || '');
-        // If we have a next part, this sentence is complete
-        // If it's the last part pair, we check if it was at the end of string
-        if (sentence.trim()) {
-            queueRef.current.push(sentence.trim());
-        }
-    }
-    
-    // The last part is the remainder
-    newBuffer = parts[parts.length - 1];
-    
-    // If the split put the delimiter in the remainder (unlikely with this split logic if used correctly)
-    // Actually split keeps the separator if wrapped in capture group.
-    
-    bufferRef.current = newBuffer;
-    processQueue();
-  }, [processQueue]);
+  });
 
   const handleInputComplete = useCallback(async (text: string) => {
-    // Play immediate encouragement filler to mask latency
-    playRandomFiller('encouragement').catch(err => logger.warn('SESSION', 'Failed to play filler', err));
-
     // Check rate limit first (unless unlocked)
     if (!isUnlocked && interactionCount >= MAX_INTERACTIONS) {
         setStatus('limit-reached');
@@ -147,11 +80,8 @@ export function useSessionManager() {
     });
 
     try {
-      // Reset streaming state
-      bufferRef.current = '';
-      queueRef.current = [];
-      isSpeakingRef.current = false;
-      isStreamActiveRef.current = true;
+      isProcessingRef.current = true;
+      startStream();
 
       const assistantMessageText = await streamChatCompletion(
           newHistory, 
@@ -159,8 +89,8 @@ export function useSessionManager() {
           handleChunk
       );
       
-      isStreamActiveRef.current = false;
-      processQueue(); // Flush any remainders
+      endStream();
+      isProcessingRef.current = false;
 
       historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
       
@@ -170,11 +100,61 @@ export function useSessionManager() {
         speakRef.current(errorMsg);
       }
     } catch {
-      isStreamActiveRef.current = false;
+      endStream();
+      isProcessingRef.current = false;
       const errorMsg = "I'm having trouble connecting. Please try again.";
       speakRef.current(errorMsg);
     }
-  }, [handleChunk, processQueue, interactionCount, isUnlocked, playRandomFiller]);
+  }, [handleChunk, startStream, endStream, interactionCount, isUnlocked]);
+
+  const handleSilence = useCallback(async () => {
+    if (isProcessingRef.current || status !== 'running') return;
+    
+    logger.info('SESSION', 'User silence detected, re-engaging...');
+    
+    // Inject a system note into history as a user message to prompt re-engagement
+    const silenceMessage: ChatMessage = { 
+        role: 'user', 
+        content: '(The user has been silent for a while. Gently re-engage them. Suggest a topic, ask about their mood, or just offer presence.)' 
+    };
+    
+    // We add this to history so the AI knows context, but it might look weird if we ever show history UI.
+    // For voice-only, it's fine.
+    const newHistory = [...historyRef.current, silenceMessage];
+    // Don't update historyRef immediately to avoid duplicate processing if user speaks now?
+    // Actually we should commit it.
+    historyRef.current = newHistory;
+
+    const sessionInteractionCount = Math.floor(newHistory.length / 2);
+    const systemPrompt = buildSystemPrompt({
+      interactionCount: sessionInteractionCount,
+      silenceDuration: 30 // Signal long silence to system prompt builder
+    });
+
+    try {
+      isProcessingRef.current = true;
+      startStream();
+
+      const assistantMessageText = await streamChatCompletion(
+          newHistory, 
+          systemPrompt, 
+          handleChunk
+      );
+      
+      endStream();
+      isProcessingRef.current = false;
+
+      historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
+    } catch (error) {
+        logger.error('SESSION', 'Failed to handle silence', error);
+        isProcessingRef.current = false;
+        endStream();
+        // Fallback static message
+        const fallback = "I'm here whenever you're ready.";
+        setCurrentAssistantMessage(fallback);
+        speakRef.current(fallback);
+    }
+  }, [status, startStream, endStream, handleChunk]);
 
   const { 
     state: voiceState, 
@@ -183,7 +163,7 @@ export function useSessionManager() {
     reset, 
     speak, 
     toggleMute
-  } = useVoiceAgent(handleInputComplete);
+  } = useVoiceAgent(handleInputComplete, handleSilence);
 
   useEffect(() => {
     speakRef.current = speak;
@@ -208,9 +188,8 @@ export function useSessionManager() {
   // Initialization Flow
   useEffect(() => {
     logger.info('APP', 'Session manager initializing...');
-    generateFillers(); // Start generating voice assets
 
-    async function checkSupport() {
+    async function initialize() {
         if (!isSecureContext()) {
             setStatus('insecure-context');
             return;
@@ -218,26 +197,25 @@ export function useSessionManager() {
       const supported = await isBrowserSupported();
       if (!supported) {
         setStatus('unsupported');
+        return;
       }
-    }
-    checkSupport();
-  }, [generateFillers]);
+      
+      // Ready - Check state
+      const accessCode = localStorage.getItem('aether_access_code');
+      const unlocked = !!accessCode;
+      const storedCount = localStorage.getItem('aether_interaction_count');
 
-  // Transition from Initializing to Idle/Limit-Reached once ready
-  useEffect(() => {
-    if (status === 'initializing' && isFillersReady) {
-        // Check if limit is already reached from storage
-        const storedCount = localStorage.getItem('aether_interaction_count');
-        // Defer state update to avoid synchronous render warning
-        setTimeout(() => {
-            if (storedCount && parseInt(storedCount, 10) >= MAX_INTERACTIONS && !isUnlocked) {
-                setStatus('limit-reached');
-            } else {
-                setStatus('idle');
-            }
-        }, 0);
+      // Defer state update to avoid synchronous render warning
+      setTimeout(() => {
+          if (storedCount && parseInt(storedCount, 10) >= MAX_INTERACTIONS && !unlocked) {
+              setStatus('limit-reached');
+          } else {
+              setStatus('idle');
+          }
+      }, 0);
     }
-  }, [status, isFillersReady, isUnlocked]);
+    initialize();
+  }, []);
 
   // Load rate limit state with reset logic
   useEffect(() => {
@@ -288,6 +266,7 @@ export function useSessionManager() {
       setPermissionStatus('granted');
       setStatus('running');
       const greeting = "Hello, I am Aether. How are you feeling right now?";
+      setCurrentAssistantMessage(greeting);
       speak(greeting);
     } else {
       setPermissionStatus('denied');
@@ -337,6 +316,7 @@ export function useSessionManager() {
       isDebugOpen,
       voiceState,
       permissionStatus,
+      currentAssistantMessage,
     },
     actions: {
       handleStartSession,

@@ -1,14 +1,12 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSessionManager } from '@/features/session/hooks/use-session-manager';
 import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
-import { useVoiceFillers } from '@/features/voice/hooks/use-voice-fillers';
 import { requestMicrophonePermission } from '@/features/voice/utils/permissions';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { verifyAccessCode } from '@/features/rate-limit/utils/access-code';
 
 // Mock Dependencies
 jest.mock('@/features/voice/hooks/use-voice-agent');
-jest.mock('@/features/voice/hooks/use-voice-fillers');
 jest.mock('@/features/voice/utils/permissions');
 jest.mock('@/features/voice/utils/browser-support');
 jest.mock('@/features/rate-limit/utils/access-code');
@@ -28,7 +26,6 @@ describe('useSessionManager', () => {
   const mockStopListening = jest.fn();
   const mockSpeak = jest.fn();
   const mockReset = jest.fn();
-  const mockGenerateFillers = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -44,12 +41,6 @@ describe('useSessionManager', () => {
       toggleMute: jest.fn(),
     });
 
-    (useVoiceFillers as jest.Mock).mockReturnValue({
-      isReady: true,
-      generateFillers: mockGenerateFillers,
-      playRandomFiller: jest.fn().mockResolvedValue(undefined),
-    });
-
     (isBrowserSupported as jest.Mock).mockResolvedValue(true);
     (isSecureContext as jest.Mock).mockReturnValue(true);
   });
@@ -59,10 +50,7 @@ describe('useSessionManager', () => {
 
     expect(result.current.state.status).toBe('initializing');
     
-    // Should trigger filler generation
-    expect(mockGenerateFillers).toHaveBeenCalled();
-
-    // Should transition to idle once fillers are ready (mocked as ready=true)
+    // Should transition to idle once initialization is done
     await waitFor(() => {
       expect(result.current.state.status).toBe('idle');
     });
@@ -70,11 +58,6 @@ describe('useSessionManager', () => {
 
   it('should handle unsupported browser', async () => {
     (isBrowserSupported as jest.Mock).mockResolvedValue(false);
-    (useVoiceFillers as jest.Mock).mockReturnValue({
-      isReady: false, // Prevent race condition with idle transition
-      generateFillers: mockGenerateFillers,
-      playRandomFiller: jest.fn().mockResolvedValue(undefined),
-    });
     
     const { result } = renderHook(() => useSessionManager());
 
