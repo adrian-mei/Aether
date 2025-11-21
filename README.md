@@ -2,8 +2,6 @@
 
 Aether is a browser-based, voice-first AI companion designed to provide a safe, non-judgmental space for users to express their emotions. Unlike typical assistants, Aether focuses on **Connection over Correction**, using active listening techniques to validate feelings without offering unsolicited advice.
 
-![Aether Visualizer](public/file.svg)
-
 ## ✨ Key Features
 
 *   **Voice-First Interface**: Fluid, hands-free conversation using the Web Speech API (`webkitSpeechRecognition`).
