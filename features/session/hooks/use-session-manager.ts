@@ -6,10 +6,13 @@ import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { logger } from '@/shared/lib/logger';
 
-export type SessionStatus = 'idle' | 'running' | 'unsupported' | 'insecure-context';
+export type SessionStatus = 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
+
+const MAX_INTERACTIONS = 10;
 
 export function useSessionManager() {
   const [status, setStatus] = useState<SessionStatus>('idle');
+  const [interactionCount, setInteractionCount] = useState(0);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   
@@ -84,6 +87,20 @@ export function useSessionManager() {
   }, [processQueue]);
 
   const handleInputComplete = useCallback(async (text: string) => {
+    // Check rate limit first
+    if (interactionCount >= MAX_INTERACTIONS) {
+        setStatus('limit-reached');
+        const limitMsg = "I have enjoyed our time together. To continue our journey, please join the waitlist.";
+        await speakRef.current(limitMsg, { autoResume: false });
+        resetRef.current();
+        return;
+    }
+
+    // Update count
+    const newCount = interactionCount + 1;
+    setInteractionCount(newCount);
+    localStorage.setItem('aether_interaction_count', newCount.toString());
+
     // Check for stop commands
     const lowerText = text.trim().toLowerCase().replace(/[.!?,]$/, '');
     const stopCommands = ['stop', 'quit', 'pause', 'exit', 'end session', 'end chat', 'bye', 'goodbye'];
@@ -103,9 +120,9 @@ export function useSessionManager() {
     historyRef.current = newHistory;
 
     // Build system prompt with context
-    const interactionCount = Math.floor(newHistory.length / 2);
+    const sessionInteractionCount = Math.floor(newHistory.length / 2);
     const systemPrompt = buildSystemPrompt({
-      interactionCount,
+      interactionCount: sessionInteractionCount,
       // TODO: Add mood analysis and other context signals
     });
 
@@ -137,7 +154,7 @@ export function useSessionManager() {
       const errorMsg = "I'm having trouble connecting. Please try again.";
       speakRef.current(errorMsg);
     }
-  }, [handleChunk, processQueue]);
+  }, [handleChunk, processQueue, interactionCount]);
 
   const { 
     state: voiceState, 
@@ -183,9 +200,21 @@ export function useSessionManager() {
     checkSupport();
   }, []);
 
+  // Load rate limit state
+  useEffect(() => {
+    const storedCount = localStorage.getItem('aether_interaction_count');
+    if (storedCount) {
+      const count = parseInt(storedCount, 10);
+      setInteractionCount(count);
+      if (count >= MAX_INTERACTIONS) {
+        setStatus('limit-reached');
+      }
+    }
+  }, []);
+
   const handleStartSession = async () => {
     logger.info('APP', 'User clicked Start Session');
-    if (status === 'unsupported') return;
+    if (status === 'unsupported' || status === 'limit-reached') return;
 
     setPermissionStatus('pending');
     const granted = await requestMicrophonePermission();
@@ -201,6 +230,7 @@ export function useSessionManager() {
   };
 
   const toggleListening = () => {
+    if (status === 'limit-reached') return;
     logger.info('APP', 'User clicked Toggle Listening', { currentState: voiceState });
     if (voiceState === 'idle') {
       startListening();

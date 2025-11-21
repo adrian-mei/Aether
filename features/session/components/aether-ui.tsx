@@ -5,6 +5,7 @@ import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { Lock, Compass, AlertCircle } from 'lucide-react';
+import { WaitlistModal } from './waitlist-modal';
 
 interface AetherUIProps {
   voiceState: VoiceAgentState;
@@ -161,6 +162,9 @@ export const AetherUI = ({
     if (permissionStatus === 'pending') {
         return { text: 'Requesting Access', subtext: 'Check your browser prompt' };
     }
+    if (sessionStatus === 'limit-reached') {
+        return { text: 'Session Limit', subtext: 'Thank you for visiting' };
+    }
 
     const messages: Record<string, { text: string; subtext: string }> = {
       idle: { text: 'Ready to listen', subtext: 'Tap to begin' },
@@ -186,6 +190,11 @@ export const AetherUI = ({
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950">
+      <WaitlistModal 
+        isOpen={sessionStatus === 'limit-reached'} 
+        onJoin={(email) => console.log('Waitlist join:', email)} 
+      />
+
       {/* Deep gradient overlay for depth */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20" />
       
