@@ -80,6 +80,13 @@ export function useAetherVoice(
     setState('idle');
   }, [recognition, synth]);
 
+  const reset = useCallback(() => {
+    logger.info('VOICE', 'Resetting state');
+    if (synth?.speaking) synth.cancel();
+    recognition?.stop();
+    setState('idle');
+  }, [recognition, synth]);
+
   // The "Soft, Tender" Voice Logic
   const speak = useCallback((text: string) => {
     if (!synth) {
@@ -146,6 +153,7 @@ export function useAetherVoice(
     state,
     startListening,
     stopListening,
+    reset,
     speak
   };
 }

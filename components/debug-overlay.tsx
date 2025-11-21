@@ -2,16 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger, LogEntry } from '../lib/logger';
-import { X, Trash2, Filter, PanelBottom, PanelLeft, PanelRight } from 'lucide-react';
+import { X, Trash2, Filter, PanelBottom, PanelLeft, PanelRight, Network } from 'lucide-react';
 
 interface DebugOverlayProps {
   isOpen: boolean;
   onClose: () => void;
+  onTestApi?: () => void;
 }
 
 type Position = 'bottom' | 'left' | 'right';
 
-export default function DebugOverlay({ isOpen, onClose }: DebugOverlayProps) {
+export default function DebugOverlay({ isOpen, onClose, onTestApi }: DebugOverlayProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activePanes, setActivePanes] = useState<string[]>(['VOICE', 'API', 'APP', 'error']);
   const [position, setPosition] = useState<Position>('bottom');
@@ -209,6 +210,17 @@ export default function DebugOverlay({ isOpen, onClose }: DebugOverlayProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 pl-2">
+          {onTestApi && (
+            <button 
+              onClick={onTestApi} 
+              className="p-1 hover:text-emerald-400 flex items-center gap-1" 
+              title="Test API Connection"
+            >
+              <Network size={14} />
+              <span className="text-[10px] font-medium hidden sm:inline">Test API</span>
+            </button>
+          )}
+          <div className="h-4 w-px bg-white/10 mx-1" />
           <button onClick={clearLogs} className="p-1 hover:text-red-400" title="Clear Logs">
             <Trash2 size={14} />
           </button>

@@ -1,6 +1,5 @@
 'use client';
 
-import { useChat } from '@ai-sdk/react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAetherVoice } from '../hooks/use-aether-voice';
 import { Mic, Bug } from 'lucide-react';
@@ -11,133 +10,108 @@ import { logger } from '../lib/logger';
 export default function AetherInterface() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
-  const requestStartTime = useRef<number>(0);
-
-  // Custom Voice Hook
-  // We define this first to pass its 'speak' function to useChat if needed, 
-  // or simpler: define useChat first and pass 'append' to voice hook.
-  // But voice hook needs 'onInputComplete' which calls 'append'.
-  // And useChat 'onFinish' calls 'speak'.
-  // This circular dependency is solved by using refs or careful ordering.
-  // In the user's example, they pass `append` to `useAetherVoice`.
+  const [conversationHistory, setConversationHistory] = useState<{role: string, content: string}[]>([]);
   
-  // We need 'speak' available for 'onFinish'. 
-  // But 'speak' comes from 'useAetherVoice'.
-  // 'useAetherVoice' needs 'append' from 'useChat'.
-  
-  // Let's assume the user's provided code structure works or I adapt it.
-  // User code:
-  /*
-  const { messages, append, isLoading } = useChat({
-    ...
-    onFinish: (message) => { speak(message.content); },
-  });
-  
-  const { ..., speak } = useAetherVoice(async (text) => { await append(...) });
-  */
-  // This creates a closure issue because 'speak' is used in 'useChat' config before it's defined.
-  // However, in React functional components, we can't use a variable before declaration.
-  // We can solve this by using a ref for 'speak' or 'append'.
-  
-  // Better approach:
-  // 1. Define useChat.
-  // 2. Define useAetherVoice.
-  // 3. Use a useEffect to handle the speaking of new messages, OR use a Ref for the speak function passed to onFinish.
-  
-  // Let's try to implement it closer to the provided snippet but fixing the dependency.
-  // I'll use a mutable ref for the 'speak' function so useChat can call it.
-  
-  // ... actually, useChat's onFinish capture the closure.
-  // If I define useAetherVoice *after* useChat, I can't pass 'speak' to useChat options directly if it's static.
-  // BUT, useChat options are re-evaluated on render? No, usually static.
-  // However, I can use `useEffect` on `messages` to trigger speak, similar to how I did before?
-  // The user's code snippet:
-  // `const { messages, append, isLoading } = useChat({ ..., onFinish: (m) => speak(m.content) })`
-  // This implies `speak` is available.
-  // But `const { ..., speak } = useAetherVoice(...)` comes AFTER.
-  // This is invalid JS/TS (using variable before declaration).
-  
-  // I will re-arrange or use a Ref.
-  // Using a Ref for `speak` is safe.
-  
-  // Wait, I can just use `useEffect` to watch for new assistant messages that just finished?
-  // Or simpler:
-  // Declare `useAetherVoice` first with a dummy callback, then `useChat`, then update `useAetherVoice`? No.
-  
-  // Solution:
-  // Define `handleInputComplete` which calls `append`.
-  // Define `handleMessageFinished` which calls `speak`.
-  // But `append` comes from `useChat`.
-  // And `speak` comes from `useAetherVoice`.
-  
-  // I will use a ref for `append` to break the cycle for `useAetherVoice`.
-  // And I will use a ref for `speak` to break the cycle for `useChat`.
-
-  /* 
-     User provided code had this structure which is technically impossible if literally pasted:
-     const { ... } = useChat({ onFinish: (m) => speak(...) }) // speak is not defined yet
-     const { speak } = useAetherVoice(...)
-  */
-
-  // I will implement a robust version.
-  
-  const speakRef = useRef<(text: string) => void>(() => {});
-  const appendRef = useRef<(req: any) => Promise<any>>(async () => null);
-
-  const { messages, append, isLoading } = useChat({
-    api: '/api/chat',
-    onResponse: (response: any) => {
-      const duration = Date.now() - requestStartTime.current;
-      logger.info('API', 'Response stream started', { 
-        status: response.status, 
-        statusText: response.statusText,
-        latencyMs: duration 
-      });
-    },
-    onFinish: (result: any) => {
-      const duration = Date.now() - requestStartTime.current;
-      const message = result?.message;
-      let text = '';
-      if (message) {
-        if (message.parts) {
-            text = message.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('');
-        } else if ((message as any).content) {
-            text = (message as any).content;
-        }
-      }
-      logger.info('API', 'Response finished', { 
-        textLength: text.length,
-        totalDurationMs: duration
-      });
-      if (text) speakRef.current(text);
-    },
-    onError: (error: any) => {
-        logger.error('API', 'Chat error', error);
-    }
-  } as any) as any;
-  
-  // Update appendRef
-  useEffect(() => {
-    if (append) {
-      appendRef.current = append;
-    }
-  }, [append]);
+  // Ref to track history without triggering re-renders during stream
+  const historyRef = useRef<{role: string, content: string}[]>([]);
 
   const handleInputComplete = useCallback(async (text: string) => {
     logger.info('APP', 'User input processing', { text });
-    requestStartTime.current = Date.now();
-    // When user finishes speaking, send to AI
-    await appendRef.current({ role: 'user', content: text });
+    const start = Date.now();
+    
+    // Update history
+    const userMessage = { role: 'user', content: text };
+    const newHistory = [...historyRef.current, userMessage];
+    historyRef.current = newHistory;
+    // We don't necessarily need to set state if we aren't rendering bubbles, 
+    // but good for debugging if we add a view later.
+    // setConversationHistory(newHistory); 
+
+    try {
+        logger.info('APP', 'Sending request to LLM...');
+        
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: newHistory })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
+        if (!response.body) {
+            throw new Error('No response body');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let assistantMessage = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            assistantMessage += chunk;
+        }
+
+        logger.info('APP', 'Response finished', { 
+            textLength: assistantMessage.length,
+            totalDurationMs: Date.now() - start 
+        });
+
+        // Update history with assistant response
+        historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessage }];
+
+        // Speak the response
+        if (assistantMessage.trim()) {
+            // We need to access 'speak' here. 
+            // Since this function is passed TO useAetherVoice, we can't easily access 'speak' 
+            // from the hook return value inside this callback (circular dependency).
+            // SOLUTION: We don't pass this callback to useAetherVoice anymore.
+            // We use useEffect to trigger the API call when voice input completes?
+            // OR we use a ref for speak?
+            
+            // Wait, useAetherVoice calls onInputComplete.
+            // I can't call 'speak' inside here directly if 'speak' comes from useAetherVoice return.
+            // BUT I can use a ref that is updated by the component.
+            speakRef.current(assistantMessage);
+        } else {
+            logger.warn('APP', 'Empty response received');
+            speakRef.current("I'm sorry, I didn't catch that.");
+        }
+
+    } catch (e: any) {
+        logger.error('APP', 'Failed to send request', { error: e.message });
+        speakRef.current("I'm having trouble connecting. Please try again.");
+    }
   }, []);
 
-  const { state, startListening, stopListening, speak } = useAetherVoice(handleInputComplete);
-  
-  // Update speakRef
+  // Mutable ref to hold the speak function so we can call it from the input handler
+  const speakRef = useRef<(text: string) => void>(() => {});
+
+  const { state, startListening, stopListening, reset, speak } = useAetherVoice(handleInputComplete);
+
+  // Keep speakRef updated
   useEffect(() => {
-    if (speak) {
       speakRef.current = speak;
-    }
   }, [speak]);
+
+  // Timeout Watchdog
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
+    if (state === 'processing') {
+      timeoutId = setTimeout(() => {
+        logger.error('APP', 'Request timed out', { thresholdMs: 15000 });
+        reset();
+      }, 15000); // 15s timeout
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [state, reset]);
 
   // Initial Greeting Logic
   const handleStartSession = () => {
@@ -168,9 +142,40 @@ export default function AetherInterface() {
       setIsDebugOpen(localStorage.getItem('aether_debug') === 'true');
   }, []);
 
+  const handleTestApi = async () => {
+    logger.info('APP', 'Testing API connection...');
+    try {
+      const start = Date.now();
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: [{ role: 'user', content: 'PING' }] 
+        })
+      });
+      
+      if (!res.ok) {
+        const text = await res.text();
+        logger.error('API', 'Test failed', { status: res.status, body: text });
+        throw new Error(`API responded with ${res.status}: ${text}`);
+      }
+      
+      // Consume stream
+      const reader = res.body?.getReader();
+      if (reader) {
+        await reader.read(); 
+        reader.cancel();
+      }
+      
+      logger.info('API', 'Test successful', { latencyMs: Date.now() - start });
+    } catch (e: any) {
+      logger.error('API', 'Test error', { message: e.message });
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-slate-100 p-4">
-      <DebugOverlay isOpen={isDebugOpen} onClose={() => setIsDebugOpen(false)} />
+      <DebugOverlay isOpen={isDebugOpen} onClose={() => setIsDebugOpen(false)} onTestApi={handleTestApi} />
       
       {/* Ambient Background Effect */}
       <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/20 to-slate-950 pointer-events-none" />
