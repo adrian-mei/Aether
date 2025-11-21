@@ -1,10 +1,6 @@
 import { verifyAccessCode } from '@/features/rate-limit/utils/access-code';
 
-// Mock Crypto API for Node.js environment (Jest runs in Node)
-// Jest 29+ with jsdom might have crypto, but subtle might need polyfill or mock if not present
-// Let's check if we need to mock it. Node 19+ has global crypto.
-// If running in older node or jsdom without full crypto support, we mock it.
-
+// Mock Crypto API
 const mockDigest = jest.fn();
 
 Object.defineProperty(global, 'crypto', {
@@ -16,35 +12,46 @@ Object.defineProperty(global, 'crypto', {
   writable: true,
 });
 
-// Helper to mock SHA-256 hash
-const mockSha256 = (input: string, outputHex: string) => {
-  // Simple mock that returns a buffer corresponding to the hex
-  // We ignore input matching for simplicity in this mock setup, 
-  // assuming the test calls it with specific values.
-  // Real implementation uses TextEncoder, so we just return the buffer.
-  const buffer = new Uint8Array(outputHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-  mockDigest.mockResolvedValue(buffer.buffer);
-};
-
 describe('verifyAccessCode', () => {
+  const originalEnv = process.env;
+
   beforeEach(() => {
+    jest.resetModules();
     mockDigest.mockReset();
+    process.env = { ...originalEnv };
   });
 
-  it('should return true for the correct code', async () => {
-    const CORRECT_HASH = 'fa1baeb8e6f5c28f26997f63cc08bf08ff2632a58a578b8b971dd24d5c7d7863';
-    mockSha256('lovelove', CORRECT_HASH);
+  afterAll(() => {
+    process.env = originalEnv;
+  });
 
-    const result = await verifyAccessCode('lovelove');
+  it('should return true for the correct code configured in env', async () => {
+    const DUMMY_SECRET = 'dummy-secret';
+    // Use a dummy hash for testing (this matches what we'll tell the mock to produce for the secret)
+    const DUMMY_HASH = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+    
+    process.env.NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
+
+    // Mock digest to return the DUMMY_HASH bytes when called
+    // We convert the hex string back to bytes to simulate what crypto.subtle.digest returns
+    const buffer = new Uint8Array(DUMMY_HASH.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    mockDigest.mockResolvedValue(buffer.buffer);
+
+    const result = await verifyAccessCode(DUMMY_SECRET);
     expect(result).toBe(true);
     expect(mockDigest).toHaveBeenCalledWith('SHA-256', expect.anything());
   });
 
   it('should return false for an incorrect code', async () => {
-    const WRONG_HASH = '0000000000000000000000000000000000000000000000000000000000000000';
-    mockSha256('wrong', WRONG_HASH);
+    const DUMMY_HASH = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+    process.env.NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
 
-    const result = await verifyAccessCode('wrong');
+    // Mock digest to return a DIFFERENT hash (e.g. for 'wrong-code')
+    const WRONG_HASH = '0000000000000000000000000000000000000000000000000000000000000000';
+    const buffer = new Uint8Array(WRONG_HASH.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+    mockDigest.mockResolvedValue(buffer.buffer);
+
+    const result = await verifyAccessCode('wrong-code');
     expect(result).toBe(false);
   });
 
