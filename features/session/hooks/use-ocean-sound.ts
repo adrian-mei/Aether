@@ -8,7 +8,7 @@ export function useOceanSound(initialVolume = 0.05) {
   const initAudio = useCallback(() => {
     if (audioContextRef.current) return;
 
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AudioContextClass();
     audioContextRef.current = ctx;
 

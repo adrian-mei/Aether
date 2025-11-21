@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         }
 
         // Usage is available after stream finishes
-        const usage = await result.usage as any;
+        const usage = await result.usage as unknown as { promptTokens: number; completionTokens: number; totalTokens: number };
         const { promptTokens, completionTokens, totalTokens } = usage;
         const cost = (promptTokens / 1_000_000 * INPUT_COST_PER_MILLION) + 
                      (completionTokens / 1_000_000 * OUTPUT_COST_PER_MILLION);
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
         });
         controller.enqueue(encoder.encode(`data: ${logData}\n\n`));
 
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Streaming error:', error);
         const errorData = JSON.stringify({ type: 'error', content: 'Stream error' });
         controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));

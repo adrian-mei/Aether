@@ -1,6 +1,43 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/shared/lib/logger';
-import { kokoroService, KOKORO_VOICES, KokoroVoice } from '@/features/voice/services/kokoro-service';
+import { kokoroService } from '@/features/voice/services/kokoro-service';
+
+// Minimal types for Web Speech API
+interface SpeechRecognitionEvent {
+  results: {
+    [key: number]: {
+      [key: number]: {
+        transcript: string;
+      };
+    };
+    length: number;
+  };
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+  message?: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => void) | null;
+  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+}
+
+// Extend Window interface
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognition;
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
 
 export type VoiceAgentState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
 export type Engine = 'web-speech' | 'kokoro';
@@ -10,7 +47,7 @@ export function useVoiceAgent(
 ) {
   const [state, setState] = useState<VoiceAgentState>('idle');
   const stateRef = useRef<VoiceAgentState>(state);
-  const [recognition, setRecognition] = useState<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
   
   // Fixed Configuration: Kokoro Heart
@@ -25,7 +62,7 @@ export function useVoiceAgent(
   useEffect(() => {
     logger.info('VOICE', 'Eager loading Kokoro engine');
     kokoroService.initialize().catch(e => {
-        logger.error('VOICE', 'Failed to eager load Kokoro', e);
+        logger.error('VOICE', 'Failed to eager load Kokoro', e as Error);
     });
   }, []);
 
@@ -53,8 +90,8 @@ export function useVoiceAgent(
 
   // Initialize Speech Recognition
   useEffect(() => {
-    if (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const rec = new SpeechRecognition();
       rec.continuous = true; // Keep listening to handle pauses
       rec.interimResults = true; // Get real-time updates for silence detection
@@ -66,15 +103,16 @@ export function useVoiceAgent(
         transcriptRef.current = '';
       };
       
-      rec.onresult = (event: any) => {
+      rec.onresult = (event: SpeechRecognitionEvent) => {
         retryCount.current = 0;
         
         // Clear existing timer on new input
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
 
         // Reconstruct full transcript from results
-        const currentTranscript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
+        // Using Array.from on array-like object
+        const currentTranscript = Array.from({ length: event.results.length }, (_, i) => event.results[i])
+          .map((result) => result[0].transcript)
           .join('');
         
         transcriptRef.current = currentTranscript;
@@ -92,7 +130,7 @@ export function useVoiceAgent(
         }, SILENCE_TIMEOUT_MS);
       };
 
-      rec.onerror = (event: any) => {
+      rec.onerror = (event: SpeechRecognitionErrorEvent) => {
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
         
         if (event.error === 'not-allowed') {
@@ -125,7 +163,7 @@ export function useVoiceAgent(
             try {
                 rec.start();
             } catch (e) {
-                logger.error('VOICE', 'Failed to restart recognition', e);
+                logger.error('VOICE', 'Failed to restart recognition', e as Error);
                 setState('idle');
             }
         } else if (stateRef.current === 'listening' && retryCount.current === 0) {
@@ -139,7 +177,7 @@ export function useVoiceAgent(
         }
       };
 
-      setRecognition(rec);
+      recognitionRef.current = rec;
       logger.debug('VOICE', 'SpeechRecognition initialized');
     }
   }, [onInputComplete]);
@@ -153,27 +191,28 @@ export function useVoiceAgent(
     
     logger.info('VOICE', 'Starting listening');
     try {
-      recognition?.start();
-    } catch (e: any) {
-      if (e.name === 'InvalidStateError' || e.message?.includes('already started')) {
+      recognitionRef.current?.start();
+    } catch (e: unknown) {
+      const error = e as Error;
+      if (error.name === 'InvalidStateError' || error.message?.includes('already started')) {
         logger.debug('VOICE', 'Recognition already started, ignoring duplicate start');
       } else {
-        logger.error('VOICE', 'Failed to start recognition', e);
+        logger.error('VOICE', 'Failed to start recognition', error);
       }
     }
-  }, [recognition, synth]);
+  }, [synth]);
 
   const stopListening = useCallback(() => {
     logger.info('VOICE', 'Stopping listening');
     if (silenceTimer.current) clearTimeout(silenceTimer.current);
     retryCount.current = 0; // Prevent auto-restart
-    recognition?.stop();
+    recognitionRef.current?.stop();
     if (synth?.speaking) {
         synth.cancel();
     }
     kokoroService.stop();
     setState('idle');
-  }, [recognition, synth]);
+  }, [synth]);
 
   const toggleMute = useCallback(() => {
     if (state === 'muted') {
@@ -183,19 +222,19 @@ export function useVoiceAgent(
     } else {
       // Mute: stop listening but allow AI to continue speaking
       logger.info('VOICE', 'Muting microphone');
-      recognition?.stop();
+      recognitionRef.current?.stop();
       setState('muted');
     }
-  }, [state, recognition]);
+  }, [state]);
 
   const reset = useCallback(() => {
     logger.info('VOICE', 'Resetting state');
     retryCount.current = 0;
     if (synth?.speaking) synth.cancel();
     kokoroService.stop();
-    recognition?.stop();
+    recognitionRef.current?.stop();
     setState('idle');
-  }, [recognition, synth]);
+  }, [synth]);
 
   // The "Soft, Tender" Voice Logic
   const speak = useCallback(async (text: string, options: { autoResume?: boolean } = { autoResume: true }) => {
@@ -236,7 +275,7 @@ export function useVoiceAgent(
         }
         return;
     } catch (e) {
-        logger.error('VOICE', 'Kokoro failed, falling back to Web Speech', e);
+        logger.error('VOICE', 'Kokoro failed, falling back to Web Speech', e as Error);
         // Fallback: Continue to Web Speech logic below
     }
 
@@ -277,7 +316,7 @@ export function useVoiceAgent(
     utterance.onend = () => {
       logger.info('VOICE', 'Speech synthesis ended');
       // Only auto-start listening if not muted
-      if (state !== 'muted') {
+      if (stateRef.current !== 'muted') {
         if (options.autoResume) {
             logger.info('VOICE', 'Auto-resuming listening');
             retryCount.current = 0; // Reset retries for new turn

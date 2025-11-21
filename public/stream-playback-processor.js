@@ -15,7 +15,8 @@ class StreamPlaybackProcessor extends AudioWorkletProcessor {
     };
   }
 
-  process(inputs, outputs, parameters) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  process(inputs, outputs, _parameters) {
     const output = outputs[0];
     const channelCount = output.length;
     if (this.buffer.length === 0) {

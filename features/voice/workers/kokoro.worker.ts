@@ -7,12 +7,7 @@ type WorkerMessage =
   | { type: 'generate'; text: string; voice: string }
   | { type: 'warm' };
 
-type WorkerResponse = 
-  | { type: 'ready'; voices: any[] }
-  | { type: 'audio'; audio: Float32Array; sampleRate: number }
-  | { type: 'error'; error: string };
-
-const ctx: Worker = self as any;
+const ctx: Worker = self as unknown as Worker;
 let tts: KokoroTTS | null = null;
 
 ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
@@ -87,7 +82,7 @@ ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       }
 
       const result = await tts.generate(text, {
-        voice: selectedVoice as any,
+        voice: selectedVoice as unknown as "af_heart", // Casting to known type or generic string if library supports it
       });
 
       if (result && result.audio) {
@@ -104,8 +99,9 @@ ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         throw new Error('No audio output');
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Kokoro Worker] Error:', error);
-    ctx.postMessage({ type: 'error', error: error.message || String(error) });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    ctx.postMessage({ type: 'error', error: errorMessage });
   }
 };

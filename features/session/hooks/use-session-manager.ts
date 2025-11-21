@@ -1,19 +1,20 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useVoiceAgent, VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
+import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
 import { streamChatCompletion, ChatMessage } from '@/features/ai/services/chat-service';
 import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
 import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/utils/permissions';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { logger } from '@/shared/lib/logger';
 import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
+import { useVoiceFillers } from '@/features/voice/hooks/use-voice-fillers';
 
-export type SessionStatus = 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
+export type SessionStatus = 'initializing' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
 const MAX_INTERACTIONS = 10;
 const RESET_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 export function useSessionManager() {
-  const [status, setStatus] = useState<SessionStatus>('idle');
+  const [status, setStatus] = useState<SessionStatus>('initializing');
   const [interactionCount, setInteractionCount] = useState(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
@@ -23,11 +24,15 @@ export function useSessionManager() {
   const speakRef = useRef<(text: string, options?: { autoResume?: boolean }) => Promise<void>>(async () => {});
   const resetRef = useRef<() => void>(() => {});
 
+  // Voice Fillers
+  const { isReady: isFillersReady, generateFillers, playRandomFiller } = useVoiceFillers();
+
   // Streaming State
   const bufferRef = useRef<string>('');
   const queueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
   const isStreamActiveRef = useRef<boolean>(false);
+  const processQueueRef = useRef<() => Promise<void>>(async () => {});
 
   const processQueue = useCallback(async () => {
     if (isSpeakingRef.current) return;
@@ -53,8 +58,12 @@ export function useSessionManager() {
     await speakRef.current(text, { autoResume: isLast });
     
     isSpeakingRef.current = false;
-    processQueue();
+    processQueueRef.current();
   }, []);
+
+  useEffect(() => {
+    processQueueRef.current = processQueue;
+  }, [processQueue]);
 
   const handleChunk = useCallback((chunk: string) => {
     bufferRef.current += chunk;
@@ -90,6 +99,9 @@ export function useSessionManager() {
   }, [processQueue]);
 
   const handleInputComplete = useCallback(async (text: string) => {
+    // Play immediate encouragement filler to mask latency
+    playRandomFiller('encouragement').catch(err => logger.warn('SESSION', 'Failed to play filler', err));
+
     // Check rate limit first (unless unlocked)
     if (!isUnlocked && interactionCount >= MAX_INTERACTIONS) {
         setStatus('limit-reached');
@@ -157,12 +169,12 @@ export function useSessionManager() {
         const errorMsg = "I'm sorry, I didn't catch that.";
         speakRef.current(errorMsg);
       }
-    } catch (e) {
+    } catch {
       isStreamActiveRef.current = false;
       const errorMsg = "I'm having trouble connecting. Please try again.";
       speakRef.current(errorMsg);
     }
-  }, [handleChunk, processQueue, interactionCount]);
+  }, [handleChunk, processQueue, interactionCount, isUnlocked, playRandomFiller]);
 
   const { 
     state: voiceState, 
@@ -193,8 +205,11 @@ export function useSessionManager() {
     return () => clearTimeout(timeoutId);
   }, [voiceState, reset]);
 
+  // Initialization Flow
   useEffect(() => {
-    logger.info('APP', 'Session manager initialized.');
+    logger.info('APP', 'Session manager initializing...');
+    generateFillers(); // Start generating voice assets
+
     async function checkSupport() {
         if (!isSecureContext()) {
             setStatus('insecure-context');
@@ -206,7 +221,23 @@ export function useSessionManager() {
       }
     }
     checkSupport();
-  }, []);
+  }, [generateFillers]);
+
+  // Transition from Initializing to Idle/Limit-Reached once ready
+  useEffect(() => {
+    if (status === 'initializing' && isFillersReady) {
+        // Check if limit is already reached from storage
+        const storedCount = localStorage.getItem('aether_interaction_count');
+        // Defer state update to avoid synchronous render warning
+        setTimeout(() => {
+            if (storedCount && parseInt(storedCount, 10) >= MAX_INTERACTIONS && !isUnlocked) {
+                setStatus('limit-reached');
+            } else {
+                setStatus('idle');
+            }
+        }, 0);
+    }
+  }, [status, isFillersReady, isUnlocked]);
 
   // Load rate limit state with reset logic
   useEffect(() => {
@@ -216,7 +247,7 @@ export function useSessionManager() {
       // Verify stored code hash (simplified check since we trust local storage, but good to be safe)
       // Ideally we re-verify, but async in useEffect is tricky. 
       // We'll assume if it's there, it's valid or the server will reject it.
-      setIsUnlocked(true);
+      setTimeout(() => setIsUnlocked(true), 0);
       return; 
     }
 
@@ -229,7 +260,7 @@ export function useSessionManager() {
       
       if (now - timestamp > RESET_WINDOW_MS) {
         // Reset window has passed
-        setInteractionCount(0);
+        setTimeout(() => setInteractionCount(0), 0);
         localStorage.setItem('aether_interaction_count', '0');
         localStorage.removeItem('aether_limit_timestamp'); // Will be set on next interaction
         return;
@@ -238,10 +269,12 @@ export function useSessionManager() {
 
     if (storedCount) {
       const count = parseInt(storedCount, 10);
-      setInteractionCount(count);
-      if (count >= MAX_INTERACTIONS) {
-        setStatus('limit-reached');
-      }
+      setTimeout(() => {
+        setInteractionCount(count);
+        if (count >= MAX_INTERACTIONS) {
+          setStatus('limit-reached');
+        }
+      }, 0);
     }
   }, []);
 
@@ -281,7 +314,8 @@ export function useSessionManager() {
   };
 
   useEffect(() => {
-    setIsDebugOpen(localStorage.getItem('aether_debug') === 'true');
+    const debug = localStorage.getItem('aether_debug') === 'true';
+    setTimeout(() => setIsDebugOpen(debug), 0);
   }, []);
 
   const verifyAccessCode = async (code: string): Promise<boolean> => {

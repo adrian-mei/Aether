@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger, LogEntry } from '../lib/logger';
-import { X, Trash2, Filter, PanelBottom, PanelLeft, PanelRight, Network } from 'lucide-react';
+import { X, Trash2, PanelBottom, PanelLeft, PanelRight, Network } from 'lucide-react';
 interface DebugOverlayProps {
   isOpen: boolean;
   onClose: () => void;
@@ -262,7 +262,7 @@ export default function DebugOverlay({
                       'text-slate-300'
                     }`}>
                       {log.message}
-                      {log.data && (
+                      {!!log.data && (
                         <span className="text-slate-500 ml-1 block text-[10px]">
                           {typeof log.data === 'object' ? JSON.stringify(log.data) : String(log.data)}
                         </span>
