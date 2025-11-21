@@ -28,28 +28,16 @@ export default function DebugOverlay({ isOpen, onClose, onTestApi }: DebugOverla
   };
 
   useEffect(() => {
-    // Load preferences
-    const savedPos = localStorage.getItem('debug_position') as Position;
-    const savedSize = localStorage.getItem('debug_size');
-    const savedPanes = localStorage.getItem('debug_panes');
+    // This effect ensures we always have the latest logs, even if some were logged before this component mounted.
+    const handleNewLog = () => {
+        setLogs([...logger.getLogs()]);
+    };
     
-    if (savedPos) setPosition(savedPos);
-    if (savedSize) setSize(parseInt(savedSize));
-    if (savedPanes) {
-      try {
-        setActivePanes(JSON.parse(savedPanes));
-      } catch (e) {
-        // ignore invalid json
-      }
-    }
+    // Set initial logs
+    handleNewLog();
 
-    // Load initial logs
-    setLogs(logger.getLogs());
-
-    // Subscribe to new logs
-    const unsubscribe = logger.subscribe((entry) => {
-      setLogs((prev) => [...prev, entry]);
-    });
+    // Subscribe to future logs
+    const unsubscribe = logger.subscribe(handleNewLog);
 
     return () => unsubscribe();
   }, []);

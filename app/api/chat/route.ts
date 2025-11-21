@@ -1,86 +1,109 @@
 import { google } from '@ai-sdk/google';
-import { streamText, convertToCoreMessages } from 'ai';
-import { buildSystemPrompt } from '@/lib/ai/system-prompt';
+import { streamText, type CoreMessage } from 'ai';
+import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
 
-// Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
+// Helper to create a stream for logs
+function createLogStream(encoder: TextEncoder) {
+    const stream = new TransformStream();
+    const writer = stream.writable.getWriter();
+    
+    function log(category: string, message: string, data?: any) {
+        const logEntry = { type: 'log', category, message, data: data || {} };
+        writer.write(encoder.encode(`data: ${JSON.stringify(logEntry)}\n\n`));
+    }
+
+    return { log, readable: stream.readable, close: () => writer.close() };
+}
+
+
 export async function POST(req: Request) {
-  try {
-    // 1. Check for API Key
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-        console.error('[API] Missing GOOGLE_GENERATIVE_AI_API_KEY');
-        return new Response('Missing API Key', { status: 500 });
-    }
+    const encoder = new TextEncoder();
+    const { log, readable: logReadable, close: closeLogStream } = createLogStream(encoder);
 
-    const { messages } = await req.json();
-    
-    console.log(`[API] Chat request received. Message count: ${messages.length}`);
-    
-    // Validate messages
-    if (!Array.isArray(messages)) {
-       throw new Error('Messages must be an array');
-    }
-    
-    // DEBUG: Log full messages structure to diagnose SDK issues
-    console.log('[API] Raw messages:', JSON.stringify(messages, null, 2));
-
-    const lastMessage = messages[messages.length - 1];
-    console.log(`[API] Last user message: "${lastMessage.content?.substring(0, 50)}..."`);
-
-    // 1. ANALYZE CONTEXT (Lightweight "Pre-flight" logic)
-    const interactionCount = messages.length;
-    const recentUserMood = interactionCount > 2 ? "likely vulnerable" : undefined;
-
-    console.log(`[API] Context Analysis - Count: ${interactionCount}, Mood: ${recentUserMood}`);
-
-    // 2. BUILD THE OPINIONATED PROMPT
-    const systemInstruction = buildSystemPrompt({
-      interactionCount,
-      recentUserMood
-    });
-    
-    console.log('[API] Generated System Prompt:\n', systemInstruction);
-
-    // Attempt to use SDK helper, fallback to manual if it fails
-    let coreMessages;
     try {
-      // We explicitly imported convertToCoreMessages, so we can try it.
-      // But wait, previously it crashed with "undefined map".
-      // This implies 'messages' might have been weird, OR the import is wrong.
-      // Let's inspect 'messages' in logs first.
-      coreMessages = messages.map((m: any) => ({
-          role: m.role,
-          content: m.content,
-      }));
-    } catch (e) {
-      console.error('[API] Message conversion failed', e);
-      throw e;
+        log('API', 'Request received');
+
+        if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+            log('ERROR', 'Missing GOOGLE_GENERATIVE_AI_API_KEY');
+            throw new Error('Missing API Key');
+        }
+
+        const { messages } = await req.json();
+        log('API', `Processing ${messages.length} messages`);
+
+        if (!Array.isArray(messages)) {
+            throw new Error('Messages must be an array');
+        }
+
+        const systemInstruction = buildSystemPrompt({
+            interactionCount: messages.length,
+            recentUserMood: undefined, // Basic context for now
+        });
+        log('API', 'System prompt generated', { length: systemInstruction.length });
+
+        const geminiResponse = streamText({
+            model: google('gemini-2.5-flash'),
+            messages: messages as CoreMessage[],
+            system: systemInstruction,
+            temperature: 0.7,
+            onFinish: ({ usage }) => {
+                log('API', 'Token usage', usage);
+                closeLogStream();
+            },
+        });
+
+        const geminiStream = geminiResponse.toTextStreamResponse().body!;
+
+        // Interleave AI response with logs
+        const combinedStream = new ReadableStream({
+            async start(controller) {
+                let geminiDone = false;
+                let logDone = false;
+
+                const reader = geminiStream.getReader();
+                const logReader = logReadable.getReader();
+
+                async function pushData(streamReader: ReadableStreamDefaultReader<Uint8Array>, isLog: boolean) {
+                    while (true) {
+                        try {
+                            const { done, value } = await streamReader.read();
+                            if (done) {
+                                if (isLog) logDone = true; else geminiDone = true;
+                                if (geminiDone && logDone) controller.close();
+                                break;
+                            }
+                            
+                            if (isLog) {
+                                 controller.enqueue(value);
+                            } else {
+                                const chunk = { type: 'text', value: new TextDecoder().decode(value) };
+                                controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+                            }
+                        } catch (e) {
+                            log('ERROR', 'Stream push error', { message: (e as Error).message });
+                            break;
+                        }
+                    }
+                }
+                
+                pushData(reader, false);
+                pushData(logReader, true);
+            }
+        });
+
+        return new Response(combinedStream, {
+            headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        });
+
+    } catch (error: any) {
+        log('ERROR', 'Error processing request', { message: error.message });
+        closeLogStream();
+        // Return the log stream even on error
+        return new Response(logReadable, { 
+            status: 500,
+            headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        });
     }
-
-    // 3. EXECUTE STREAM
-    console.log('[API] Starting streamText with Gemini 2.5 Flash...');
-    return streamText({
-        model: google('gemini-2.5-flash'),
-        messages: coreMessages,
-        system: systemInstruction, // <--- The "Opinionated" Brain
-        temperature: 0.7,
-        onFinish: ({ usage, finishReason }) => {
-          const { inputTokens, outputTokens, totalTokens } = usage as any;
-          // Estimate cost (Gemini Flash ~ $0.10/1M input, $0.40/1M output)
-          // Note: 2.5 Flash pricing may vary, using 1.5 Flash as baseline estimate
-          const inputCost = (inputTokens / 1_000_000) * 0.10;
-          const outputCost = (outputTokens / 1_000_000) * 0.40;
-          const totalCost = inputCost + outputCost;
-
-          console.log('[API] Token Usage:', JSON.stringify(usage, null, 2));
-          console.log(`[API] Estimated Cost: $${totalCost.toFixed(6)}`);
-          console.log(`[API] Finish Reason: ${finishReason}`);
-        },
-    }).toTextStreamResponse();
-
-  } catch (error: any) {
-    console.error('[API] Error processing request:', error);
-    return new Response(`Internal Server Error: ${error.message}`, { status: 500 });
-  }
 }
