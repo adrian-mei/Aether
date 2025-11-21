@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger, LogEntry } from '../lib/logger';
 import { X, Trash2, Filter, PanelBottom, PanelLeft, PanelRight, Network } from 'lucide-react';
-
 interface DebugOverlayProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,7 +11,11 @@ interface DebugOverlayProps {
 
 type Position = 'bottom' | 'left' | 'right';
 
-export default function DebugOverlay({ isOpen, onClose, onTestApi }: DebugOverlayProps) {
+export default function DebugOverlay({ 
+  isOpen, 
+  onClose, 
+  onTestApi
+}: DebugOverlayProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activePanes, setActivePanes] = useState<string[]>(['VOICE', 'API', 'APP', 'error']);
   const [position, setPosition] = useState<Position>('bottom');
