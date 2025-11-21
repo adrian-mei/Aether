@@ -32,6 +32,7 @@ export class KokoroService {
   private worker: Worker | null = null;
   private modelId = "onnx-community/Kokoro-82M-v1.0-ONNX";
   private audioContext: AudioContext | null = null;
+  private workletNode: AudioWorkletNode | null = null;
   private isInitializing = false;
   private isReady = false;
 
@@ -66,7 +67,7 @@ export class KokoroService {
       this.initPromise = { resolve, reject };
 
       try {
-        this.worker = new Worker(new URL('../workers/kokoro.worker.ts', import.meta.url));
+        this.worker = new Worker(new URL('../workers/kokoro.worker.ts', import.meta.url), { type: 'module' });
         
         this.worker.onmessage = this.handleWorkerMessage.bind(this);
         this.worker.onerror = (err) => {
@@ -90,6 +91,10 @@ export class KokoroService {
         logger.info('KOKORO', 'Worker ready', { voicesCount: voices.length });
         this.isReady = true;
         this.isInitializing = false;
+        
+        // Warm up the model
+        this.warmUp();
+
         if (this.initPromise) {
             this.initPromise.resolve();
             this.initPromise = null;
@@ -120,6 +125,13 @@ export class KokoroService {
           this.generatePromise.reject(error);
           this.generatePromise = null;
       }
+  }
+
+  public async warmUp(): Promise<void> {
+    if (this.worker) {
+      logger.info('KOKORO', 'Warming up model pipeline...');
+      this.worker.postMessage({ type: 'warm' });
+    }
   }
 
   public async speak(text: string, voiceId?: string, onPlaybackStart?: () => void): Promise<void> {

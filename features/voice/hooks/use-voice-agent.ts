@@ -198,7 +198,7 @@ export function useVoiceAgent(
   }, [recognition, synth]);
 
   // The "Soft, Tender" Voice Logic
-  const speak = useCallback(async (text: string) => {
+  const speak = useCallback(async (text: string, options: { autoResume?: boolean } = { autoResume: true }) => {
     // 1. INTERRUPTION HANDLING
     if (synth?.speaking) {
         logger.info('VOICE', 'Interrupting current speech');
@@ -222,9 +222,15 @@ export function useVoiceAgent(
         
         // On finish
         if (stateRef.current !== 'muted') {
-            logger.info('VOICE', 'Kokoro speech finished, resuming listening');
-            setState('idle');
-            startListening();
+            if (options.autoResume) {
+                logger.info('VOICE', 'Kokoro speech finished, resuming listening');
+                setState('idle');
+                startListening();
+            } else {
+                logger.debug('VOICE', 'Speech finished, keeping mic off for next chunk');
+                // Keep state as 'speaking' to maintain UI consistency (visualizer) during gaps
+                setState('speaking');
+            }
         } else {
             setState('muted');
         }
@@ -272,10 +278,12 @@ export function useVoiceAgent(
       logger.info('VOICE', 'Speech synthesis ended');
       // Only auto-start listening if not muted
       if (state !== 'muted') {
-        logger.info('VOICE', 'Auto-resuming listening');
-        retryCount.current = 0; // Reset retries for new turn
-        setState('idle');
-        startListening();
+        if (options.autoResume) {
+            logger.info('VOICE', 'Auto-resuming listening');
+            retryCount.current = 0; // Reset retries for new turn
+            setState('idle');
+            startListening();
+        }
       } else {
         logger.info('VOICE', 'Mic is muted, staying muted');
         setState('muted');

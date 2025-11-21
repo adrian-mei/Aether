@@ -7,7 +7,8 @@ export interface ChatMessage {
 
 export async function streamChatCompletion(
   history: ChatMessage[],
-  systemPrompt?: string
+  systemPrompt?: string,
+  onChunk?: (chunk: string) => void
 ): Promise<string> {
   logger.info('CHAT_SERVICE', 'Sending request to LLM...');
   const start = Date.now();
@@ -48,6 +49,7 @@ export async function streamChatCompletion(
             const data = JSON.parse(dataStr);
             if (data.type === 'text') {
               assistantMessage += data.content;
+              if (onChunk) onChunk(data.content);
             } else if (data.type === 'usage') {
               logger.info('API', 'Token Usage', data.data);
             } else if (data.type === 'error') {

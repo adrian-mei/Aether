@@ -14,8 +14,74 @@ export function useSessionManager() {
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   
   const historyRef = useRef<ChatMessage[]>([]);
-  const speakRef = useRef<(text: string) => void>(() => {});
+  const speakRef = useRef<(text: string, options?: { autoResume?: boolean }) => Promise<void>>(async () => {});
   const resetRef = useRef<() => void>(() => {});
+
+  // Streaming State
+  const bufferRef = useRef<string>('');
+  const queueRef = useRef<string[]>([]);
+  const isSpeakingRef = useRef<boolean>(false);
+  const isStreamActiveRef = useRef<boolean>(false);
+
+  const processQueue = useCallback(async () => {
+    if (isSpeakingRef.current) return;
+
+    if (queueRef.current.length === 0) {
+        if (!isStreamActiveRef.current && bufferRef.current.trim()) {
+             // Flush remainder
+             const text = bufferRef.current.trim();
+             bufferRef.current = '';
+             isSpeakingRef.current = true;
+             await speakRef.current(text, { autoResume: true });
+             isSpeakingRef.current = false;
+        }
+        return;
+    }
+
+    isSpeakingRef.current = true;
+    const text = queueRef.current.shift()!;
+    
+    // Determine if this is the absolute last chunk
+    const isLast = !isStreamActiveRef.current && queueRef.current.length === 0 && !bufferRef.current.trim();
+    
+    await speakRef.current(text, { autoResume: isLast });
+    
+    isSpeakingRef.current = false;
+    processQueue();
+  }, []);
+
+  const handleChunk = useCallback((chunk: string) => {
+    bufferRef.current += chunk;
+    
+    // Split into sentences using a simple heuristic
+    // Match anything ending in . ! ? followed by whitespace or EOF
+    // Note: This is imperfect (e.g. "Mr. Smith") but fast.
+    const splitRegex = /([.!?]+["']?(?:\s+|$))/;
+    const parts = bufferRef.current.split(splitRegex);
+    
+    // parts will look like ["Hello", ". ", "How are you", "? ", ""]
+    // We want to combine delimiter with previous part
+    
+    let newBuffer = '';
+    
+    for (let i = 0; i < parts.length - 1; i += 2) {
+        const sentence = parts[i] + (parts[i+1] || '');
+        // If we have a next part, this sentence is complete
+        // If it's the last part pair, we check if it was at the end of string
+        if (sentence.trim()) {
+            queueRef.current.push(sentence.trim());
+        }
+    }
+    
+    // The last part is the remainder
+    newBuffer = parts[parts.length - 1];
+    
+    // If the split put the delimiter in the remainder (unlikely with this split logic if used correctly)
+    // Actually split keeps the separator if wrapped in capture group.
+    
+    bufferRef.current = newBuffer;
+    processQueue();
+  }, [processQueue]);
 
   const handleInputComplete = useCallback(async (text: string) => {
     // Check for stop commands
@@ -43,21 +109,34 @@ export function useSessionManager() {
     });
 
     try {
-      const assistantMessageText = await streamChatCompletion(newHistory, systemPrompt);
+      // Reset streaming state
+      bufferRef.current = '';
+      queueRef.current = [];
+      isSpeakingRef.current = false;
+      isStreamActiveRef.current = true;
+
+      const assistantMessageText = await streamChatCompletion(
+          newHistory, 
+          systemPrompt, 
+          handleChunk
+      );
+      
+      isStreamActiveRef.current = false;
+      processQueue(); // Flush any remainders
+
       historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
       
-      if (assistantMessageText.trim()) {
-        speakRef.current(assistantMessageText);
-      } else {
+      if (!assistantMessageText.trim()) {
         logger.warn('SESSION', 'Empty response received');
         const errorMsg = "I'm sorry, I didn't catch that.";
         speakRef.current(errorMsg);
       }
     } catch (e) {
+      isStreamActiveRef.current = false;
       const errorMsg = "I'm having trouble connecting. Please try again.";
       speakRef.current(errorMsg);
     }
-  }, []);
+  }, [handleChunk, processQueue]);
 
   const { 
     state: voiceState, 
