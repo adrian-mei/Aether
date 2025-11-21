@@ -1,30 +1,52 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, Check } from 'lucide-react';
+import { Sparkles, ArrowRight, Check, X, Key } from 'lucide-react';
 
 interface WaitlistModalProps {
   isOpen: boolean;
   onJoin: (email: string) => void;
+  onClose: () => void;
+  onBypass: (code: string) => Promise<boolean>;
 }
 
-export const WaitlistModal = ({ isOpen, onJoin }: WaitlistModalProps) => {
+export const WaitlistModal = ({ isOpen, onJoin, onClose, onBypass }: WaitlistModalProps) => {
   const [email, setEmail] = useState('');
+  const [accessCode, setAccessCode] = useState('');
+  const [mode, setMode] = useState<'waitlist' | 'access'>('waitlist');
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
-
+    setError('');
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    onJoin(email);
-    setSubmitted(true);
-    setIsSubmitting(false);
+
+    if (mode === 'waitlist') {
+        if (!email) return;
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        onJoin(email);
+        setSubmitted(true);
+        setIsSubmitting(false);
+    } else {
+        if (!accessCode) return;
+        const success = await onBypass(accessCode);
+        setIsSubmitting(false);
+        if (success) {
+            onClose(); // Close modal on success
+        } else {
+            setError('Invalid access code');
+        }
+    }
+  };
+
+  const toggleMode = () => {
+      setMode(prev => prev === 'waitlist' ? 'access' : 'waitlist');
+      setError('');
   };
 
   return (
@@ -35,6 +57,15 @@ export const WaitlistModal = ({ isOpen, onJoin }: WaitlistModalProps) => {
       {/* Modal Content */}
       <div className="relative w-full max-w-md transform transition-all duration-500 scale-100 opacity-100">
         <div className="relative overflow-hidden rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-emerald-950/90 to-teal-950/90 p-8 shadow-2xl shadow-emerald-900/20">
+          {/* Close Button */}
+          <button 
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-emerald-900/50 text-emerald-400/50 hover:text-emerald-300 transition-colors z-20"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
           {/* Ambient Glow */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
           <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/20 rounded-full blur-3xl" />
@@ -52,12 +83,15 @@ export const WaitlistModal = ({ isOpen, onJoin }: WaitlistModalProps) => {
             {/* Text */}
             <div className="space-y-2">
               <h2 className="text-2xl font-light tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-teal-200">
-                {submitted ? "You're on the list" : "Demo Limit Reached"}
+                {submitted ? "You're on the list" : (mode === 'access' ? "Enter Access Code" : "Demo Limit Reached")}
               </h2>
               <p className="text-emerald-100/60 text-sm leading-relaxed">
                 {submitted 
                   ? "Thank you for your interest in Aether. We'll notify you when early access opens."
-                  : "I hope you've found value in our session. To continue your journey and unlock unlimited conversations, please join our beta waitlist."}
+                  : (mode === 'access' 
+                      ? "Enter your code to unlock unlimited sessions."
+                      : "Please come back in 12 hours to continue chatting, or join the waitlist for unlimited access.")
+                }
               </p>
             </div>
 
@@ -65,15 +99,29 @@ export const WaitlistModal = ({ isOpen, onJoin }: WaitlistModalProps) => {
             {!submitted && (
               <form onSubmit={handleSubmit} className="w-full space-y-4">
                 <div className="relative group">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email address"
-                    className="w-full px-5 py-3.5 rounded-xl bg-emerald-950/50 border border-emerald-400/20 text-emerald-100 placeholder-emerald-400/30 focus:outline-none focus:border-emerald-400/50 focus:ring-1 focus:ring-emerald-400/50 transition-all"
-                    required
-                  />
+                  {mode === 'waitlist' ? (
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter your email address"
+                        className="w-full px-5 py-3.5 rounded-xl bg-emerald-950/50 border border-emerald-400/20 text-emerald-100 placeholder-emerald-400/30 focus:outline-none focus:border-emerald-400/50 focus:ring-1 focus:ring-emerald-400/50 transition-all"
+                        required
+                      />
+                  ) : (
+                      <input
+                        type="password"
+                        value={accessCode}
+                        onChange={(e) => setAccessCode(e.target.value)}
+                        placeholder="Enter access code"
+                        className="w-full px-5 py-3.5 rounded-xl bg-emerald-950/50 border border-emerald-400/20 text-emerald-100 placeholder-emerald-400/30 focus:outline-none focus:border-emerald-400/50 focus:ring-1 focus:ring-emerald-400/50 transition-all"
+                        required
+                      />
+                  )}
                 </div>
+                
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -83,10 +131,23 @@ export const WaitlistModal = ({ isOpen, onJoin }: WaitlistModalProps) => {
                     <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      Join Waitlist
+                      {mode === 'waitlist' ? 'Join Waitlist' : 'Unlock Access'}
                       <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                     </>
                   )}
+                </button>
+
+                <button 
+                    type="button"
+                    onClick={toggleMode}
+                    className="text-emerald-400/50 hover:text-emerald-300 text-sm transition-colors flex items-center justify-center gap-2 w-full"
+                >
+                    {mode === 'waitlist' ? (
+                        <>
+                            <Key className="w-3 h-3" />
+                            Have an access code?
+                        </>
+                    ) : "Back to Waitlist"}
                 </button>
               </form>
             )}

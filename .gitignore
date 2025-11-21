@@ -5,6 +5,9 @@
 
 # Testing
 /coverage
+/__tests__/coverage
+*.test.js.map
+*.test.ts.map
 
 # Next.js
 /.next/

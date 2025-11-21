@@ -14,9 +14,17 @@ export async function streamChatCompletion(
   const start = Date.now();
   
   try {
+    // Safe access to localStorage
+    const accessCode = typeof window !== 'undefined' 
+      ? localStorage.getItem('aether_access_code') || '' 
+      : '';
+    
     const response = await fetch('/api/gemini', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-access-code': accessCode
+      },
       body: JSON.stringify({ messages: history, system: systemPrompt }),
     });
 
@@ -69,7 +77,10 @@ export async function streamChatCompletion(
 
     return assistantMessage;
   } catch (e: any) {
-    logger.error('CHAT_SERVICE', 'Failed to send request', { error: e.message });
+    logger.error('CHAT_SERVICE', 'Failed to send request', { 
+      error: e.message || 'Unknown error',
+      details: JSON.stringify(e, Object.getOwnPropertyNames(e)) 
+    });
     // Re-throw to be handled by the caller
     throw new Error("Failed to get chat completion.");
   }

@@ -6,6 +6,7 @@ import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { Lock, Compass, AlertCircle } from 'lucide-react';
 import { WaitlistModal } from './waitlist-modal';
+import { useOceanSound } from '../hooks/use-ocean-sound';
 
 interface AetherUIProps {
   voiceState: VoiceAgentState;
@@ -13,6 +14,7 @@ interface AetherUIProps {
   sessionStatus: SessionStatus;
   onStartSession: () => void;
   onToggleListening: () => void;
+  onBypass: (code: string) => Promise<boolean>;
 }
 
 type EmotionalTone = 'calm' | 'warm' | 'contemplative' | 'engaged';
@@ -26,13 +28,23 @@ export const AetherUI = ({
   permissionStatus, 
   sessionStatus,
   onStartSession, 
-  onToggleListening 
+  onToggleListening,
+  onBypass
 }: AetherUIProps) => {
   const [emotionalTone, setEmotionalTone] = useState<EmotionalTone>('calm');
   const [orbs, setOrbs] = useState<any[]>([]);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [breatheIntensity, setBreatheIntensity] = useState(1);
+  const [isModalDismissed, setIsModalDismissed] = useState(false);
   const orbRef = useRef<HTMLButtonElement>(null);
+  const { play: playOcean } = useOceanSound(0.05);
+
+  // Reset modal dismissal when status changes to limit-reached
+  useEffect(() => {
+    if (sessionStatus === 'limit-reached') {
+      setIsModalDismissed(false);
+    }
+  }, [sessionStatus]);
 
   // Map actual voiceState to UI state
   const getUIVoiceState = (): UIVoiceState => {
@@ -116,6 +128,14 @@ export const AetherUI = ({
   }, [voiceState]);
 
   const handleInteraction = () => {
+    if (sessionStatus === 'limit-reached') {
+      setIsModalDismissed(false); // Re-open modal if dismissed
+      return;
+    }
+
+    // Trigger background audio
+    playOcean();
+
     if (sessionStatus === 'unsupported' || sessionStatus === 'insecure-context') return;
     
     if (sessionStatus === 'idle') {
@@ -191,8 +211,10 @@ export const AetherUI = ({
   return (
     <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950">
       <WaitlistModal 
-        isOpen={sessionStatus === 'limit-reached'} 
+        isOpen={sessionStatus === 'limit-reached' && !isModalDismissed} 
         onJoin={(email) => console.log('Waitlist join:', email)} 
+        onClose={() => setIsModalDismissed(true)}
+        onBypass={onBypass}
       />
 
       {/* Deep gradient overlay for depth */}
@@ -451,6 +473,13 @@ export const AetherUI = ({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Footer - Privacy Notice */}
+        <div className="absolute bottom-4 w-full text-center">
+          <p className="text-emerald-400/30 text-[10px] uppercase tracking-widest font-light">
+            We do not use user cookies • Local storage only
+          </p>
         </div>
       </div>
 

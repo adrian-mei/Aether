@@ -17,6 +17,7 @@ export function SessionContainer() {
         sessionStatus={state.status}
         onStartSession={actions.handleStartSession}
         onToggleListening={actions.toggleListening}
+        onBypass={actions.verifyAccessCode}
       />
 
       <DebugOverlay 

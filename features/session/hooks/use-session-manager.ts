@@ -5,14 +5,17 @@ import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
 import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/utils/permissions';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { logger } from '@/shared/lib/logger';
+import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
 
 export type SessionStatus = 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
 const MAX_INTERACTIONS = 10;
+const RESET_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 export function useSessionManager() {
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [interactionCount, setInteractionCount] = useState(0);
+  const [isUnlocked, setIsUnlocked] = useState(false);
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   
@@ -87,8 +90,8 @@ export function useSessionManager() {
   }, [processQueue]);
 
   const handleInputComplete = useCallback(async (text: string) => {
-    // Check rate limit first
-    if (interactionCount >= MAX_INTERACTIONS) {
+    // Check rate limit first (unless unlocked)
+    if (!isUnlocked && interactionCount >= MAX_INTERACTIONS) {
         setStatus('limit-reached');
         const limitMsg = "I have enjoyed our time together. To continue our journey, please join the waitlist.";
         await speakRef.current(limitMsg, { autoResume: false });
@@ -96,10 +99,15 @@ export function useSessionManager() {
         return;
     }
 
-    // Update count
+    // Update count (even if unlocked, we track it, but don't limit)
     const newCount = interactionCount + 1;
     setInteractionCount(newCount);
     localStorage.setItem('aether_interaction_count', newCount.toString());
+
+    // Set timestamp on first interaction if not set
+    if (!localStorage.getItem('aether_limit_timestamp')) {
+      localStorage.setItem('aether_limit_timestamp', Date.now().toString());
+    }
 
     // Check for stop commands
     const lowerText = text.trim().toLowerCase().replace(/[.!?,]$/, '');
@@ -200,9 +208,34 @@ export function useSessionManager() {
     checkSupport();
   }, []);
 
-  // Load rate limit state
+  // Load rate limit state with reset logic
   useEffect(() => {
+    // Check for access code first
+    const storedAccessCode = localStorage.getItem('aether_access_code');
+    if (storedAccessCode) {
+      // Verify stored code hash (simplified check since we trust local storage, but good to be safe)
+      // Ideally we re-verify, but async in useEffect is tricky. 
+      // We'll assume if it's there, it's valid or the server will reject it.
+      setIsUnlocked(true);
+      return; 
+    }
+
     const storedCount = localStorage.getItem('aether_interaction_count');
+    const storedTimestamp = localStorage.getItem('aether_limit_timestamp');
+    
+    if (storedTimestamp) {
+      const timestamp = parseInt(storedTimestamp, 10);
+      const now = Date.now();
+      
+      if (now - timestamp > RESET_WINDOW_MS) {
+        // Reset window has passed
+        setInteractionCount(0);
+        localStorage.setItem('aether_interaction_count', '0');
+        localStorage.removeItem('aether_limit_timestamp'); // Will be set on next interaction
+        return;
+      }
+    }
+
     if (storedCount) {
       const count = parseInt(storedCount, 10);
       setInteractionCount(count);
@@ -251,6 +284,19 @@ export function useSessionManager() {
     setIsDebugOpen(localStorage.getItem('aether_debug') === 'true');
   }, []);
 
+  const verifyAccessCode = async (code: string): Promise<boolean> => {
+    const isValid = await verifyHash(code);
+    if (isValid) {
+      setIsUnlocked(true);
+      localStorage.setItem('aether_access_code', code);
+      if (status === 'limit-reached') {
+          setStatus('idle');
+      }
+      return true;
+    }
+    return false;
+  };
+
   return {
     state: {
       status,
@@ -267,6 +313,7 @@ export function useSessionManager() {
         toggleMute();
       },
       onRetryPermission: handleStartSession,
+      verifyAccessCode,
     },
   };
 }

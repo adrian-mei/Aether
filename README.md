@@ -18,6 +18,7 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 *   **Voice Engine**: Kokoro-JS + ONNX Runtime Web (WebGPU / WASM)
 *   **AI/Streaming**: Vercel AI SDK 5.0 + Google Gemini 2.0 Flash
 *   **State Management**: React Hooks (`useSessionManager`, `useVoiceAgent`)
+*   **Testing**: Jest + React Testing Library
 
 ## 🚀 Getting Started
 
@@ -51,6 +52,14 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 
 5.  **Open the App:**
     Visit [http://localhost:3000](http://localhost:3000) in a modern browser (Chrome/Edge recommended for WebGPU support).
+
+### Running Tests
+
+This project uses Jest for unit testing.
+
+```bash
+npm test
+```
 
 ## 🐛 Debugging
 
