@@ -86,12 +86,13 @@ export function useSessionManager() {
   const handleInputComplete = useCallback(async (text: string) => {
     // Check for stop commands
     const lowerText = text.trim().toLowerCase().replace(/[.!?,]$/, '');
-    const stopCommands = ['stop', 'quit', 'pause', 'exit', 'end session', 'end chat'];
+    const stopCommands = ['stop', 'quit', 'pause', 'exit', 'end session', 'end chat', 'bye', 'goodbye'];
     
     if (stopCommands.includes(lowerText)) {
       logger.info('SESSION', 'User requested stop', { command: lowerText });
       const goodbye = "Goodbye.";
-      speakRef.current(goodbye);
+      // Wait for goodbye to finish speaking before resetting
+      await speakRef.current(goodbye, { autoResume: false });
       resetRef.current();
       setStatus('idle');
       return;
