@@ -16,14 +16,14 @@ export default function VoiceVisualizer({ state, size = 240, isInteractive = fal
     switch (state) {
       case 'speaking':
         return {
-          bg: 'bg-blue-500',
-          glow: 'shadow-[0_0_60px_rgba(59,130,246,0.6)]',
+          bg: 'bg-rose-500',
+          glow: 'shadow-[0_0_60px_rgba(244,63,94,0.6)]',
           scale: 'scale-110',
         };
       case 'listening':
         return {
-          bg: 'bg-emerald-500',
-          glow: 'shadow-[0_0_60px_rgba(16,185,129,0.6)]',
+          bg: 'bg-teal-500',
+          glow: 'shadow-[0_0_60px_rgba(20,184,166,0.6)]',
           scale: 'scale-105',
         };
       case 'processing':
@@ -34,20 +34,20 @@ export default function VoiceVisualizer({ state, size = 240, isInteractive = fal
         };
       case 'muted':
         return {
-          bg: 'bg-slate-500',
-          glow: 'shadow-[0_0_40px_rgba(100,116,139,0.4)]',
+          bg: 'bg-stone-500',
+          glow: 'shadow-[0_0_40px_rgba(120,113,108,0.4)]',
           scale: 'scale-100',
         };
       case 'idle':
         return {
-          bg: 'bg-indigo-500',
-          glow: 'shadow-[0_0_50px_rgba(99,102,241,0.5)]',
+          bg: 'bg-orange-500',
+          glow: 'shadow-[0_0_50px_rgba(249,115,22,0.5)]',
           scale: 'scale-100',
         };
       default:
         return {
-          bg: 'bg-slate-700',
-          glow: 'shadow-[0_0_30px_rgba(71,85,105,0.3)]',
+          bg: 'bg-stone-700',
+          glow: 'shadow-[0_0_30px_rgba(68,64,60,0.3)]',
           scale: 'scale-95',
         };
     }
@@ -121,8 +121,8 @@ export default function VoiceVisualizer({ state, size = 240, isInteractive = fal
       </button>
 
       {/* Status text */}
-      <div className="absolute -bottom-12 w-full text-center">
-        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+      <div className="absolute -bottom-16 w-full text-center">
+        <p className="text-sm font-medium text-stone-400 uppercase tracking-widest">
           {state === 'speaking' && "Speaking"}
           {state === 'listening' && "Listening"}
           {state === 'processing' && "Processing"}

@@ -6,19 +6,20 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 
 ## ✨ Key Features
 
-*   **Voice-First Interface**: Fluid, hands-free conversation using the Web Speech API (`webkitSpeechRecognition` & `speechSynthesis`).
-*   **Empathetic AI**: Powered by Google Gemini 1.5 Flash via Vercel AI SDK, prompted to prioritize validation and mood tracking.
+*   **Voice-First Interface**: Fluid, hands-free conversation using the Web Speech API (`webkitSpeechRecognition`).
+*   **Hyper-Realistic TTS**: Runs **Kokoro 82M** (Neural TTS) locally in the browser using **WebGPU**, delivering human-level voice quality with zero server cost.
+*   **Instant Response**: Uses sentence-level streaming to start speaking immediately (TTFA ~500ms), masking generation latency.
+*   **Empathetic AI**: Powered by Google Gemini 2.0 Flash via Vercel AI SDK, prompted to prioritize validation and mood tracking.
 *   **Ambient UI**: A soothing, glassmorphic interface that visually responds to the conversation state (Listening, Thinking, Speaking).
-*   **Privacy-Centric**: Voice processing happens locally in the browser where possible; only text is sent to the LLM.
 
 ## 🛠 Tech Stack
 
 *   **Framework**: Next.js 16 (App Router)
 *   **Language**: TypeScript / React 19
 *   **Styling**: Tailwind CSS 4
-*   **API**: Next.js App Router (`app/api`)
-*   **AI/Streaming**: Vercel AI SDK 5.0 + Google Gemini
-*   **State Management**: React Hooks (Custom `useAetherVoice`)
+*   **Voice Engine**: Kokoro-JS + ONNX Runtime Web (WebGPU / WASM)
+*   **AI/Streaming**: Vercel AI SDK 5.0 + Google Gemini 2.0 Flash
+*   **State Management**: React Hooks (`useSessionManager`, `useVoiceAgent`)
 
 ## 🚀 Getting Started
 
@@ -51,7 +52,7 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
     ```
 
 5.  **Open the App:**
-    Visit [http://localhost:3000](http://localhost:3000) in Chrome (required for Web Speech API support).
+    Visit [http://localhost:3000](http://localhost:3000) in a modern browser (Chrome/Edge recommended for WebGPU support).
 
 ## 🐛 Debugging
 
