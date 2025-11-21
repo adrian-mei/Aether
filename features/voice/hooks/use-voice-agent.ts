@@ -1,55 +1,142 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/shared/lib/logger';
+import { kokoroService, KOKORO_VOICES, KokoroVoice } from '@/features/voice/services/kokoro-service';
 
 export type VoiceAgentState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
+export type Engine = 'web-speech' | 'kokoro';
 
 export function useVoiceAgent(
   onInputComplete: (text: string) => void
 ) {
   const [state, setState] = useState<VoiceAgentState>('idle');
+  const stateRef = useRef<VoiceAgentState>(state);
   const [recognition, setRecognition] = useState<any>(null);
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
+  
+  // Fixed Configuration: Kokoro Heart
+  const engine: Engine = 'kokoro';
+  
+  // Keep stateRef in sync
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  // Eager Load Kokoro on Mount
+  useEffect(() => {
+    logger.info('VOICE', 'Eager loading Kokoro engine');
+    kokoroService.initialize().catch(e => {
+        logger.error('VOICE', 'Failed to eager load Kokoro', e);
+    });
+  }, []);
+
+
+  // Refs for silence detection
+  const silenceTimer = useRef<NodeJS.Timeout | null>(null);
+  const transcriptRef = useRef<string>('');
+  
+  // Retry mechanism to extend listening window
+  const retryCount = useRef(0);
+  const MAX_RETRIES = 2;
+  const SILENCE_TIMEOUT_MS = 2000; // Wait 2s of silence before sending
+
+  // Cleanup audio on page refresh/unload
+  useEffect(() => {
+    const handleUnload = () => {
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      kokoroService.stop();
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, []);
 
   // Initialize Speech Recognition
   useEffect(() => {
     if (typeof window !== 'undefined' && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const rec = new SpeechRecognition();
-      rec.continuous = false; // Capture one phrase at a time for fluid turn-taking
-      rec.interimResults = false;
+      rec.continuous = true; // Keep listening to handle pauses
+      rec.interimResults = true; // Get real-time updates for silence detection
       rec.lang = 'en-US';
 
       rec.onstart = () => {
         logger.info('VOICE', 'SpeechRecognition started');
         setState('listening');
+        transcriptRef.current = '';
       };
       
       rec.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        logger.info('VOICE', 'Speech recognized', { 
-          transcript, 
-          confidence: event.results[0][0].confidence 
-        });
-        setState('processing');
-        onInputComplete(transcript); // Send to AI
+        retryCount.current = 0;
+        
+        // Clear existing timer on new input
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
+
+        // Reconstruct full transcript from results
+        const currentTranscript = Array.from(event.results)
+          .map((result: any) => result[0].transcript)
+          .join('');
+        
+        transcriptRef.current = currentTranscript;
+
+        // Set new timer
+        silenceTimer.current = setTimeout(() => {
+          if (transcriptRef.current.trim()) {
+            logger.info('VOICE', 'Silence detected, processing input', { 
+              transcript: transcriptRef.current 
+            });
+            rec.stop(); // Stop listening
+            setState('processing');
+            onInputComplete(transcriptRef.current);
+          }
+        }, SILENCE_TIMEOUT_MS);
       };
 
       rec.onerror = (event: any) => {
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        
         if (event.error === 'not-allowed') {
           setState('permission-denied');
+          retryCount.current = 0;
           logger.error('VOICE', 'Microphone permission denied', { error: event.error }, new Error().stack);
-        } else if (event.error === 'no-speech' || event.error === 'aborted') {
-          logger.info('VOICE', 'Speech recognition stopped', { reason: event.error });
+        } else if (event.error === 'no-speech') {
+          logger.info('VOICE', 'No speech detected (silence)');
+          // Increment retry count to trigger restart in onend
+          retryCount.current += 1;
+        } else if (event.error === 'aborted') {
+          logger.info('VOICE', 'Speech recognition aborted');
+          retryCount.current = 0;
         } else {
           logger.error('VOICE', 'Speech recognition error', { 
             error: event.error, 
             message: event.message 
           }, new Error().stack);
+          retryCount.current = 0;
         }
       };
 
       rec.onend = () => {
         logger.info('VOICE', 'SpeechRecognition ended');
+        if (silenceTimer.current) clearTimeout(silenceTimer.current);
+
+        // Check if we should restart to extend the listening window
+        if (retryCount.current > 0 && retryCount.current <= MAX_RETRIES) {
+            logger.info('VOICE', 'Restarting listening to extend window', { retry: retryCount.current });
+            try {
+                rec.start();
+            } catch (e) {
+                logger.error('VOICE', 'Failed to restart recognition', e);
+                setState('idle');
+            }
+        } else if (stateRef.current === 'listening' && retryCount.current === 0) {
+             // If it ended normally but we are still in 'listening' state (meaning no result was processed)
+             // We should reset to idle. If a result came in, state would be 'processing'.
+             setState('idle');
+        } else if (retryCount.current > MAX_RETRIES) {
+             logger.info('VOICE', 'Max retries reached, stopping');
+             retryCount.current = 0;
+             setState('idle');
+        }
       };
 
       setRecognition(rec);
@@ -62,6 +149,8 @@ export function useVoiceAgent(
         logger.info('VOICE', 'Stopping speech to listen');
         synth.cancel(); 
     }
+    kokoroService.stop(); // Stop any Kokoro audio
+    
     logger.info('VOICE', 'Starting listening');
     try {
       recognition?.start();
@@ -76,63 +165,109 @@ export function useVoiceAgent(
 
   const stopListening = useCallback(() => {
     logger.info('VOICE', 'Stopping listening');
+    if (silenceTimer.current) clearTimeout(silenceTimer.current);
+    retryCount.current = 0; // Prevent auto-restart
     recognition?.stop();
     if (synth?.speaking) {
         synth.cancel();
     }
+    kokoroService.stop();
     setState('idle');
   }, [recognition, synth]);
 
   const toggleMute = useCallback(() => {
     if (state === 'muted') {
+      // Unmute: go back to idle, don't auto-start listening
+      logger.info('VOICE', 'Unmuting microphone');
       setState('idle');
-      startListening();
     } else {
+      // Mute: stop listening but allow AI to continue speaking
+      logger.info('VOICE', 'Muting microphone');
       recognition?.stop();
-      synth?.cancel();
       setState('muted');
     }
-  }, [state, recognition, synth, startListening]);
+  }, [state, recognition]);
 
   const reset = useCallback(() => {
     logger.info('VOICE', 'Resetting state');
+    retryCount.current = 0;
     if (synth?.speaking) synth.cancel();
+    kokoroService.stop();
     recognition?.stop();
     setState('idle');
   }, [recognition, synth]);
 
   // The "Soft, Tender" Voice Logic
-  const speak = useCallback((text: string) => {
+  const speak = useCallback(async (text: string, options: { autoResume?: boolean } = { autoResume: true }) => {
+    // 1. INTERRUPTION HANDLING
+    if (synth?.speaking) {
+        logger.info('VOICE', 'Interrupting current speech');
+        synth.cancel();
+    }
+    kokoroService.stop();
+
+    logger.info('VOICE', 'Requesting speech', { textLength: text.length, engine });
+    
+    // Handle Neural Engine (Primary)
+    setState('processing'); // Show spinner while generating
+    try {
+        // Fixed to Heart
+        const voiceId = 'af_heart';
+        
+        await kokoroService.speak(
+            text, 
+            voiceId,
+            () => setState('speaking') // Switch to speaking wave on audio start
+        );
+        
+        // On finish
+        if (stateRef.current !== 'muted') {
+            if (options.autoResume) {
+                logger.info('VOICE', 'Kokoro speech finished, resuming listening');
+                setState('idle');
+                startListening();
+            } else {
+                logger.debug('VOICE', 'Speech finished, keeping mic off for next chunk');
+                // Keep state as 'speaking' to maintain UI consistency (visualizer) during gaps
+                setState('speaking');
+            }
+        } else {
+            setState('muted');
+        }
+        return;
+    } catch (e) {
+        logger.error('VOICE', 'Kokoro failed, falling back to Web Speech', e);
+        // Fallback: Continue to Web Speech logic below
+    }
+
+    // Web Speech API Logic
+    setState('speaking');
     if (!synth) {
         logger.warn('VOICE', 'SpeechSynthesis not available');
         return;
     }
 
-    // 1. INTERRUPTION HANDLING: Cancel any current speech
-    if (synth.speaking) {
-        logger.info('VOICE', 'Interrupting current speech');
-        synth.cancel();
-    }
-
-    logger.info('VOICE', 'Speaking text', { textLength: text.length });
-    setState('speaking');
     const utterance = new SpeechSynthesisUtterance(text);
 
-    // 2. VOICE SELECTION (Finding a female voice)
+    // 2. VOICE SELECTION (Fallback)
     const voices = synth.getVoices();
-    // Prioritize Google/Microsoft female voices which tend to be higher quality
-    const preferredVoice = voices.find(v => 
-      (v.name.includes('Google') && v.name.includes('Female')) || 
-      (v.name.includes('Zira')) || 
-      (v.name.includes('Female'))
-    );
-    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    // Priority: Catherine -> Google US Female -> Microsoft Zira -> Generic Female
+    const preferredVoice = 
+        voices.find(v => v.name.includes('Catherine')) || 
+        voices.find(v => v.name.includes('Google') && v.name.includes('US') && v.name.includes('Female')) ||
+        voices.find(v => v.name.includes('Zira')) || 
+        voices.find(v => v.name.includes('Female'));
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+      logger.info('VOICE', 'Auto-selected fallback voice', { name: preferredVoice.name });
+    }
 
-    // 3. TENDERNESS TUNING
-    // Rate < 1.0 is slower and more calming
-    utterance.rate = 0.85; 
-    // Pitch > 1.0 often sounds softer/lighter (adjust based on specific voice engine)
-    utterance.pitch = 1.1; 
+    // 3. VOICE TUNING (Cute & Normal Speed)
+    utterance.rate = 1.0; 
+    // Higher pitch for "cute" tone
+    utterance.pitch = 1.2; 
     utterance.volume = 1.0;
 
     utterance.onstart = () => {
@@ -140,10 +275,19 @@ export function useVoiceAgent(
     };
 
     utterance.onend = () => {
-      logger.info('VOICE', 'Speech synthesis ended, auto-listening');
-      setState('idle');
-      // Automatically start listening again for fluid conversation
-      startListening(); 
+      logger.info('VOICE', 'Speech synthesis ended');
+      // Only auto-start listening if not muted
+      if (state !== 'muted') {
+        if (options.autoResume) {
+            logger.info('VOICE', 'Auto-resuming listening');
+            retryCount.current = 0; // Reset retries for new turn
+            setState('idle');
+            startListening();
+        }
+      } else {
+        logger.info('VOICE', 'Mic is muted, staying muted');
+        setState('muted');
+      }
     };
 
     utterance.onerror = (e) => {

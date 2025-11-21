@@ -6,7 +6,9 @@ export interface ChatMessage {
 }
 
 export async function streamChatCompletion(
-  history: ChatMessage[]
+  history: ChatMessage[],
+  systemPrompt?: string,
+  onChunk?: (chunk: string) => void
 ): Promise<string> {
   logger.info('CHAT_SERVICE', 'Sending request to LLM...');
   const start = Date.now();
@@ -15,7 +17,7 @@ export async function streamChatCompletion(
     const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ messages: history, system: systemPrompt }),
     });
 
     if (!response.ok) {
@@ -29,14 +31,35 @@ export async function streamChatCompletion(
     const stream = response.body;
     const reader = stream.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
 
-    while(true) {
+    while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        break;
+      if (done) break;
+      
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      // Keep the last potentially incomplete chunk in buffer
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6);
+          try {
+            const data = JSON.parse(dataStr);
+            if (data.type === 'text') {
+              assistantMessage += data.content;
+              if (onChunk) onChunk(data.content);
+            } else if (data.type === 'usage') {
+              logger.info('API', 'Token Usage', data.data);
+            } else if (data.type === 'error') {
+              logger.error('API', 'Stream Error', { error: data.content });
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE data:', dataStr);
+          }
+        }
       }
-      const chunk = decoder.decode(value, { stream: true });
-      assistantMessage += chunk;
     }
 
     logger.info('CHAT_SERVICE', 'Response finished', {
@@ -70,11 +93,33 @@ export async function testApiConnection(): Promise<void> {
         throw new Error(`API responded with ${res.status}: ${text}`);
       }
       
-      // Consume stream
+      // Consume stream and check for usage
       const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
       if (reader) {
-        await reader.read(); 
-        reader.cancel();
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'usage') {
+                        logger.info('API', 'Test Usage', data.data);
+                    }
+                } catch (e) {
+                    // Ignore parsing errors for test
+                }
+              }
+            }
+        }
       }
       
       logger.info('API', 'Test successful', { latencyMs: Date.now() - start });
