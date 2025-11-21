@@ -54,8 +54,7 @@ export default function VoiceVisualizer({ state }: VisualizerProps) {
           {state === 'speaking' && <Sparkles className="w-12 h-12 animate-pulse" />}
           {state === 'listening' && <Mic className="w-12 h-12" />}
           {state === 'processing' && <Activity className="w-12 h-12 animate-gentle-spin" />}
-          {(state === 'idle' || state === 'muted' || state === 'paused') && <MicOff className="w-12 h-12 opacity-50" />}
-          {state === 'prompting' && <Mic className="w-12 h-12 opacity-50 animate-pulse" />}
+          {(state === 'idle' || state === 'muted') && <MicOff className="w-12 h-12 opacity-50" />}
         </div>
       </div>
 
@@ -67,8 +66,7 @@ export default function VoiceVisualizer({ state }: VisualizerProps) {
           {state === 'processing' && "Thinking"}
           {state === 'idle' && "Paused"}
           {state === 'muted' && "Muted"}
-          {state === 'paused' && "Paused"}
-          {state === 'prompting' && "Waiting for Permission"}
+          {state === 'permission-denied' && "Microphone permission denied"}
         </p>
       </div>
     </div>
