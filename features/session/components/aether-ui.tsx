@@ -8,6 +8,7 @@ import { Lock, Compass, AlertCircle } from 'lucide-react';
 import { WaitlistModal } from './waitlist-modal';
 import { useOceanSound } from '../hooks/use-ocean-sound';
 import { useWakingSound } from '../hooks/use-waking-sound';
+import { useWakeLock } from '../hooks/use-wake-lock';
 
 interface AetherUIProps {
   voiceState: VoiceAgentState;
@@ -57,7 +58,17 @@ export const AetherUI = ({
   const orbRef = useRef<HTMLButtonElement>(null);
   const { play: playOcean } = useOceanSound(0.05);
   const { playWakingSound } = useWakingSound();
+  const { requestWakeLock, releaseWakeLock } = useWakeLock();
   const hasPlayedWakeRef = useRef(false);
+
+  // Manage Wake Lock based on session status
+  useEffect(() => {
+    if (sessionStatus === 'running') {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+  }, [sessionStatus, requestWakeLock, releaseWakeLock]);
 
   // Play waking sound on initialization (once)
   useEffect(() => {

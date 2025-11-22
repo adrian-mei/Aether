@@ -59,15 +59,6 @@ export function useVoiceAgent(
     stateRef.current = state;
   }, [state]);
 
-  // Eager Load Kokoro on Mount
-  useEffect(() => {
-    logger.info('VOICE', 'Eager loading Kokoro engine');
-    kokoroService.initialize().catch(e => {
-        logger.error('VOICE', 'Failed to eager load Kokoro', e as Error);
-    });
-  }, []);
-
-
   // Refs for silence detection
   const silenceTimer = useRef<NodeJS.Timeout | null>(null);
   const watchdogTimer = useRef<NodeJS.Timeout | null>(null);

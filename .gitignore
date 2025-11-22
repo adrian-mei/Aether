@@ -19,12 +19,23 @@
 # Misc
 .DS_Store
 *.pem
+Thumbs.db
+analyze_report.py
+
+# IDEs
+.vscode/
+.idea/
+
+# Lighthouse Reports
+report-*.html
+report-*.json
+report.json
 
 # Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-server.log
+*.log
 
 # Local Env Files
 .env*.local

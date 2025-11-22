@@ -51,7 +51,7 @@ export class EmbeddingService {
       try {
         if (!this.worker) {
           // Use static worker from /public to avoid Turbopack bundling issues with transformers.js
-          this.worker = new Worker('/embedding.worker.js', { type: 'module' });
+          this.worker = new Worker('/workers/embedding.worker.js', { type: 'module' });
 
           this.worker.onmessage = this.handleWorkerMessage.bind(this);
           this.worker.onerror = (err) => {

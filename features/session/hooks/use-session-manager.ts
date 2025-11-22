@@ -9,6 +9,7 @@ import { logger } from '@/shared/lib/logger';
 import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
 import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
 import { memoryService } from '@/features/memory/services/memory-service';
+import { kokoroService } from '@/features/voice/services/kokoro-service';
 
 export type SessionStatus = 'initializing' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
@@ -254,11 +255,6 @@ export function useSessionManager() {
         return;
       }
 
-      // Initialize memory service in background (non-blocking)
-      memoryService.initialize().catch((err) => {
-        logger.warn('MEMORY', 'Memory service initialization failed, continuing without memories', err);
-      });
-
       // Ready - Check state
       // We no longer check localStorage for access code (session-only unlock)
       const storedCount = localStorage.getItem('aether_interaction_count');
@@ -308,6 +304,10 @@ export function useSessionManager() {
   const handleStartSession = async () => {
     logger.info('APP', 'User clicked Start Session');
     if (status === 'unsupported' || status === 'limit-reached') return;
+
+    // Warm up services immediately on interaction
+    kokoroService.initialize().catch(err => logger.error('APP', 'Kokoro init failed', err));
+    memoryService.initialize().catch(err => logger.error('APP', 'Memory init failed', err));
 
     // Initialize/Resume AudioContext on user interaction to unlock audio on mobile
     audioPlayer.resume().catch(err => {

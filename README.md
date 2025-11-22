@@ -13,6 +13,16 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 *   **Empathetic AI**: Powered by Google Gemini 2.0 Flash via Vercel AI SDK, prompted to prioritize validation, active listening, and mood tracking.
 *   **Ambient UI**: A soothing, glassmorphic interface that visually responds to the conversation state (Listening, Thinking, Speaking) with organic animations.
 
+## ⚡ Performance
+
+Aether is optimized for speed and low latency.
+
+*   **Lighthouse Performance Score**: **84/100** (Production Build)
+*   **Largest Contentful Paint (LCP)**: ~2.6s
+*   **Time to First Byte (TTFB)**: < 100ms
+
+> **Note**: For the best performance experience, run the app in production mode (`npm run build && npm start`). Development mode includes additional debugging scripts that significantly impact metrics.
+
 ## 🛠 Tech Stack
 
 *   **Framework**: Next.js 16 (App Router)
@@ -27,7 +37,7 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 
 ### Prerequisites
 *   Node.js 18+
-*   A Google AI Studio API Key
+*   A [Google AI Studio API Key](https://aistudio.google.com/app/apikey)
 
 ### Installation
 
@@ -48,9 +58,17 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
     GOOGLE_GENERATIVE_AI_API_KEY=your_google_api_key_here
     ```
 
-4.  **Run the Development Server:**
+4.  **Run the Application:**
+
+    **For Development (Hot Reloading):**
     ```bash
     npm run dev
+    ```
+
+    **For Production (Best Performance):**
+    ```bash
+    npm run build
+    npm start
     ```
 
 5.  **Open the App:**
