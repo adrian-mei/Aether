@@ -6,9 +6,11 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 
 *   **Voice-First Interface**: Fluid, hands-free conversation using the Web Speech API (`webkitSpeechRecognition`).
 *   **Hyper-Realistic TTS**: Runs **Kokoro 82M** (Neural TTS) locally in the browser using **WebGPU**, delivering human-level voice quality with zero server cost.
-*   **Instant Response**: Uses sentence-level streaming to start speaking immediately (TTFA ~500ms), masking generation latency.
-*   **Empathetic AI**: Powered by Google Gemini 2.0 Flash via Vercel AI SDK, prompted to prioritize validation and mood tracking.
-*   **Ambient UI**: A soothing, glassmorphic interface that visually responds to the conversation state (Listening, Thinking, Speaking).
+*   **Instant Response**: Uses sentence-level streaming to start speaking immediately (TTFA ~500ms).
+*   **Active Engagement**: Proactively detects user silence (~30s) and gently re-engages to keep the conversation flowing, acting as a supportive friend rather than a passive tool.
+*   **Closed Captions UI**: Real-time display of the AI's spoken text, ensuring the visual experience remains synchronized with the audio.
+*   **Empathetic AI**: Powered by Google Gemini 2.0 Flash via Vercel AI SDK, prompted to prioritize validation, active listening, and mood tracking.
+*   **Ambient UI**: A soothing, glassmorphic interface that visually responds to the conversation state (Listening, Thinking, Speaking) with organic animations.
 
 ## 🛠 Tech Stack
 

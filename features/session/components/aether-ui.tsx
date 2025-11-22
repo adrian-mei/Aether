@@ -243,7 +243,7 @@ export const AetherUI = ({
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950">
+    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950">
       <WaitlistModal 
         isOpen={sessionStatus === 'limit-reached' && !isModalDismissed} 
         onJoin={(email) => console.log('Waitlist join:', email)} 
@@ -295,25 +295,25 @@ export const AetherUI = ({
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-col items-center justify-between h-full px-6 py-8">
+      <div className="relative z-10 flex flex-col items-center justify-between h-full px-4 py-6 md:px-6 md:py-8">
         {/* Header with refined glassmorphism */}
         <div className="w-full max-w-2xl">
-          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/40 to-teal-950/30 rounded-[2rem] p-8 border border-emerald-400/10 shadow-[0_8px_32px_rgba(16,185,129,0.12)]">
-            <div className="flex items-baseline justify-between">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/40 to-teal-950/30 rounded-2xl md:rounded-[2rem] p-6 md:p-8 border border-emerald-400/10 shadow-[0_8px_32px_rgba(16,185,129,0.12)]">
+            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-4 md:gap-0">
               <div>
                 <h1 
-                  className="text-6xl font-extralight tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-teal-200 mb-1"
+                  className="text-4xl md:text-6xl font-extralight tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-teal-200 mb-1"
                   style={{ 
                     textShadow: '0 0 60px rgba(52,211,153,0.3)',
                   }}
                 >
                   AETHER
                 </h1>
-                <p className="text-emerald-300/60 text-sm font-light tracking-wider ml-1">
+                <p className="text-emerald-300/60 text-xs md:text-sm font-light tracking-wider ml-1">
                   Voice-First Empathetic Companion
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-end md:self-auto">
                 <div className={`w-2 h-2 rounded-full ${uiVoiceState !== 'idle' ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-600/50'}`} />
                 <span className="text-emerald-400/50 text-xs uppercase tracking-wider">
                   {uiVoiceState === 'idle' ? 'Ready' : 'Active'}
@@ -324,13 +324,13 @@ export const AetherUI = ({
         </div>
 
         {/* Central Orb Container */}
-        <div className="flex flex-col items-center justify-center space-y-10 -mt-16">
+        <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
           <div className="relative">
             {/* Outer pulsing rings */}
             {uiVoiceState === 'speaking' && (
               <>
-                <div className="absolute inset-0 -m-8 rounded-full bg-gradient-radial from-lime-500/20 to-transparent animate-pulse-slow pointer-events-none" />
-                <div className="absolute inset-0 -m-16 rounded-full bg-gradient-radial from-emerald-500/10 to-transparent animate-pulse-slower pointer-events-none" />
+                <div className="absolute inset-0 -m-6 md:-m-8 rounded-full bg-gradient-radial from-lime-500/20 to-transparent animate-pulse-slow pointer-events-none" />
+                <div className="absolute inset-0 -m-12 md:-m-16 rounded-full bg-gradient-radial from-emerald-500/10 to-transparent animate-pulse-slower pointer-events-none" />
               </>
             )}
             
@@ -365,7 +365,7 @@ export const AetherUI = ({
               ref={orbRef}
               onClick={handleInteraction}
               className={`
-                relative w-64 h-64 rounded-full
+                relative w-56 h-56 md:w-64 md:h-64 rounded-full
                 bg-gradient-to-br ${getOrbGradient()}
                 ${getOrbShadow()}
                 backdrop-blur-2xl
@@ -427,11 +427,11 @@ export const AetherUI = ({
           </div>
 
           {/* State Display with Animation */}
-          <div className="relative">
-            <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/50 to-teal-950/40 rounded-2xl px-10 py-5 border border-emerald-400/10 shadow-lg min-w-[280px]">
+          <div className="relative w-full max-w-[280px] md:max-w-none">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/50 to-teal-950/40 rounded-2xl px-6 md:px-10 py-4 md:py-5 border border-emerald-400/10 shadow-lg w-full md:min-w-[280px]">
               <div className="text-center space-y-1">
                 <p className={`
-                  text-xl font-light tracking-wide transition-all duration-500
+                  text-lg md:text-xl font-light tracking-wide transition-all duration-500
                   ${uiVoiceState === 'listening' ? 'text-emerald-300' : 
                     uiVoiceState === 'speaking' ? 'text-lime-300' :
                     uiVoiceState === 'processing' ? 'text-teal-300' :
@@ -439,7 +439,7 @@ export const AetherUI = ({
                 `}>
                   {getStateMessage().text}
                 </p>
-                <p className="text-emerald-400/50 text-sm font-light">
+                <p className="text-emerald-400/50 text-xs md:text-sm font-light">
                   {getStateMessage().subtext}
                 </p>
               </div>
@@ -471,13 +471,13 @@ export const AetherUI = ({
 
         {/* Footer with session info */}
         <div className="w-full max-w-2xl">
-          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/30 to-teal-950/20 rounded-[1.5rem] px-8 py-6 border border-emerald-400/5">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <p className="text-emerald-300/70 text-xs uppercase tracking-wider font-light">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/30 to-teal-950/20 rounded-2xl md:rounded-[1.5rem] px-6 md:px-8 py-4 md:py-6 border border-emerald-400/5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1 md:space-y-2 flex-1">
+                <p className="text-emerald-300/70 text-[10px] md:text-xs uppercase tracking-wider font-light">
                   Safe Space Mode
                 </p>
-                <p className="text-emerald-400/50 text-xs leading-relaxed max-w-md">
+                <p className="text-emerald-400/50 text-[10px] md:text-xs leading-relaxed md:max-w-md">
                   {"I'm here to listen and reflect. Your thoughts are welcomed without judgment. Everything shared remains between us."}
                 </p>
               </div>
@@ -485,13 +485,13 @@ export const AetherUI = ({
                 {/* Emotional tone indicator */}
                 <div className="flex flex-col items-center">
                   <div className={`
-                    w-12 h-12 rounded-full
+                    w-10 h-10 md:w-12 md:h-12 rounded-full
                     bg-gradient-to-br from-emerald-500/20 to-teal-500/20
                     border border-emerald-400/20
                     flex items-center justify-center
                   `}>
                     <div className={`
-                      w-6 h-6 rounded-full
+                      w-5 h-5 md:w-6 md:h-6 rounded-full
                       ${emotionalTone === 'calm' ? 'bg-emerald-500/50' :
                         emotionalTone === 'warm' ? 'bg-lime-500/50' :
                         emotionalTone === 'contemplative' ? 'bg-teal-500/50' :
@@ -499,7 +499,7 @@ export const AetherUI = ({
                       animate-pulse-slow
                     `} />
                   </div>
-                  <span className="text-emerald-500/40 text-[10px] uppercase tracking-wider mt-1">
+                  <span className="text-emerald-500/40 text-[10px] uppercase tracking-wider mt-1 hidden md:block">
                     {emotionalTone}
                   </span>
                 </div>
