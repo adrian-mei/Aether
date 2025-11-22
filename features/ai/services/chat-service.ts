@@ -1,4 +1,4 @@
-import { logger, LogEntry } from '@/shared/lib/logger';
+import { logger } from '@/shared/lib/logger';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -14,9 +14,17 @@ export async function streamChatCompletion(
   const start = Date.now();
   
   try {
+    // Safe access to localStorage
+    const accessCode = typeof window !== 'undefined' 
+      ? localStorage.getItem('aether_access_code') || '' 
+      : '';
+    
     const response = await fetch('/api/gemini', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-access-code': accessCode
+      },
       body: JSON.stringify({ messages: history, system: systemPrompt }),
     });
 
@@ -55,7 +63,7 @@ export async function streamChatCompletion(
             } else if (data.type === 'error') {
               logger.error('API', 'Stream Error', { error: data.content });
             }
-          } catch (e) {
+          } catch {
             console.error('Failed to parse SSE data:', dataStr);
           }
         }
@@ -68,8 +76,12 @@ export async function streamChatCompletion(
     });
 
     return assistantMessage;
-  } catch (e: any) {
-    logger.error('CHAT_SERVICE', 'Failed to send request', { error: e.message });
+  } catch (e: unknown) {
+    const error = e as Error;
+    logger.error('CHAT_SERVICE', 'Failed to send request', { 
+      error: error.message || 'Unknown error',
+      details: JSON.stringify(error, Object.getOwnPropertyNames(error)) 
+    });
     // Re-throw to be handled by the caller
     throw new Error("Failed to get chat completion.");
   }
@@ -114,7 +126,7 @@ export async function testApiConnection(): Promise<void> {
                     if (data.type === 'usage') {
                         logger.info('API', 'Test Usage', data.data);
                     }
-                } catch (e) {
+                } catch {
                     // Ignore parsing errors for test
                 }
               }
@@ -123,7 +135,8 @@ export async function testApiConnection(): Promise<void> {
       }
       
       logger.info('API', 'Test successful', { latencyMs: Date.now() - start });
-    } catch (e: any) {
-      logger.error('API', 'Test error', { message: e.message });
+    } catch (e: unknown) {
+      const error = e as Error;
+      logger.error('API', 'Test error', { message: error.message });
     }
 }

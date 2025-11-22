@@ -1,21 +1,42 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { Lock, Compass, AlertCircle } from 'lucide-react';
 import { WaitlistModal } from './waitlist-modal';
+import { useOceanSound } from '../hooks/use-ocean-sound';
+import { useWakingSound } from '../hooks/use-waking-sound';
 
 interface AetherUIProps {
   voiceState: VoiceAgentState;
   permissionStatus: PermissionStatus;
   sessionStatus: SessionStatus;
+  currentAssistantMessage?: string;
   onStartSession: () => void;
   onToggleListening: () => void;
+  onBypass: (code: string) => Promise<boolean>;
 }
 
 type EmotionalTone = 'calm' | 'warm' | 'contemplative' | 'engaged';
+
+interface OrbConfig {
+  color: string;
+  opacity: number;
+  blur: string;
+}
+
+interface Orb {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  duration: number;
+  delay: number;
+  config: OrbConfig;
+  rotationDuration: number;
+}
 
 // Extend VoiceAgentState for internal UI mapping if needed, 
 // but we can map 'muted' and 'error' to visual equivalents.
@@ -25,17 +46,35 @@ export const AetherUI = ({
   voiceState, 
   permissionStatus, 
   sessionStatus,
+  currentAssistantMessage,
   onStartSession, 
-  onToggleListening 
+  onToggleListening,
+  onBypass
 }: AetherUIProps) => {
-  const [emotionalTone, setEmotionalTone] = useState<EmotionalTone>('calm');
-  const [orbs, setOrbs] = useState<any[]>([]);
+  const [orbs, setOrbs] = useState<Orb[]>([]);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [breatheIntensity, setBreatheIntensity] = useState(1);
+  const [isModalDismissed, setIsModalDismissed] = useState(false);
   const orbRef = useRef<HTMLButtonElement>(null);
+  const { play: playOcean } = useOceanSound(0.05);
+  const { playWakingSound } = useWakingSound();
+  const hasPlayedWakeRef = useRef(false);
+
+  // Play waking sound on initialization (once)
+  useEffect(() => {
+    if (sessionStatus === 'initializing' && !hasPlayedWakeRef.current) {
+      hasPlayedWakeRef.current = true;
+      playWakingSound();
+    }
+  }, [sessionStatus, playWakingSound]);
+
+  // Reset modal dismissal when status changes to limit-reached
+  if (sessionStatus === 'limit-reached' && isModalDismissed) {
+    setIsModalDismissed(false);
+  }
 
   // Map actual voiceState to UI state
   const getUIVoiceState = (): UIVoiceState => {
+    if (sessionStatus === 'initializing') return 'processing'; // Use processing animation for init
     if (voiceState === 'muted') return 'listening'; // Visual fallback for muted
     if (voiceState === 'permission-denied') return 'error';
     return voiceState as UIVoiceState;
@@ -43,27 +82,23 @@ export const AetherUI = ({
 
   const uiVoiceState = getUIVoiceState();
 
-  // Derive emotional tone from voice state for now
-  useEffect(() => {
+  // Derive emotional tone from voice state
+  const emotionalTone: EmotionalTone = useMemo(() => {
     switch (voiceState) {
       case 'idle':
-        setEmotionalTone('calm');
-        break;
+        return 'calm';
       case 'listening':
-        setEmotionalTone('engaged');
-        break;
+        return 'engaged';
       case 'processing':
-        setEmotionalTone('contemplative');
-        break;
+        return 'contemplative';
       case 'speaking':
-        setEmotionalTone('warm');
-        break;
+        return 'warm';
       case 'muted':
-        setEmotionalTone('calm');
-        break;
+        return 'calm';
       case 'permission-denied':
-        setEmotionalTone('calm'); // Fallback
-        break;
+        return 'calm';
+      default:
+        return 'calm';
     }
   }, [voiceState]);
 
@@ -87,7 +122,7 @@ export const AetherUI = ({
       config: orbConfig[i % orbConfig.length],
       rotationDuration: Math.random() * 60 + 60,
     }));
-    setOrbs(newOrbs);
+    setTimeout(() => setOrbs(newOrbs), 0);
   }, []);
 
   // Track mouse for subtle parallax effect
@@ -103,7 +138,7 @@ export const AetherUI = ({
   }, []);
 
   // Breathing animation intensity based on state
-  useEffect(() => {
+  const breatheIntensity = useMemo(() => {
     const intensity: Record<string, number> = {
       idle: 1,
       listening: 1.3,
@@ -112,10 +147,20 @@ export const AetherUI = ({
       muted: 1,
       'permission-denied': 1,
     };
-    setBreatheIntensity(intensity[voiceState] || 1);
+    return intensity[voiceState] || 1;
   }, [voiceState]);
 
   const handleInteraction = () => {
+    if (sessionStatus === 'limit-reached') {
+      setIsModalDismissed(false); // Re-open modal if dismissed
+      return;
+    }
+
+    if (sessionStatus === 'initializing') return; // Ignore clicks during init
+
+    // Trigger background audio
+    playOcean();
+
     if (sessionStatus === 'unsupported' || sessionStatus === 'insecure-context') return;
     
     if (sessionStatus === 'idle') {
@@ -165,6 +210,9 @@ export const AetherUI = ({
     if (sessionStatus === 'limit-reached') {
         return { text: 'Session Limit', subtext: 'Thank you for visiting' };
     }
+    if (sessionStatus === 'initializing') {
+        return { text: 'Waking Up', subtext: 'Preparing voice engine...' };
+    }
 
     const messages: Record<string, { text: string; subtext: string }> = {
       idle: { text: 'Ready to listen', subtext: 'Tap to begin' },
@@ -174,10 +222,17 @@ export const AetherUI = ({
       muted: { text: 'Paused', subtext: 'Tap to resume' },
       error: { text: 'Connection Issue', subtext: 'Tap to retry' },
     };
+
+    // Override for speaking state if we have a message
+    if (uiVoiceState === 'speaking' && currentAssistantMessage) {
+        return { text: currentAssistantMessage, subtext: 'Aether' };
+    }
+
     return messages[uiVoiceState] || messages.idle;
   };
 
-  const getBackgroundOrbStyle = (orb: any) => {
+  const getBackgroundOrbStyle = (orb: Orb) => {
+    if (!orb?.config) return 'from-emerald-600/20 to-emerald-700/10';
     const colors: Record<string, string> = {
       emerald: 'from-emerald-600/20 to-emerald-700/10',
       green: 'from-green-600/20 to-green-700/10',
@@ -189,10 +244,12 @@ export const AetherUI = ({
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950">
+    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950">
       <WaitlistModal 
-        isOpen={sessionStatus === 'limit-reached'} 
+        isOpen={sessionStatus === 'limit-reached' && !isModalDismissed} 
         onJoin={(email) => console.log('Waitlist join:', email)} 
+        onClose={() => setIsModalDismissed(true)}
+        onBypass={onBypass}
       />
 
       {/* Deep gradient overlay for depth */}
@@ -239,25 +296,25 @@ export const AetherUI = ({
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-col items-center justify-between h-full px-6 py-8">
+      <div className="relative z-10 flex flex-col items-center justify-between h-full px-4 py-6 md:px-6 md:py-8">
         {/* Header with refined glassmorphism */}
         <div className="w-full max-w-2xl">
-          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/40 to-teal-950/30 rounded-[2rem] p-8 border border-emerald-400/10 shadow-[0_8px_32px_rgba(16,185,129,0.12)]">
-            <div className="flex items-baseline justify-between">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/40 to-teal-950/30 rounded-2xl md:rounded-[2rem] p-6 md:p-8 border border-emerald-400/10 shadow-[0_8px_32px_rgba(16,185,129,0.12)]">
+            <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-4 md:gap-0">
               <div>
                 <h1 
-                  className="text-6xl font-extralight tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-teal-200 mb-1"
+                  className="text-4xl md:text-6xl font-extralight tracking-[0.25em] text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-teal-200 mb-1"
                   style={{ 
                     textShadow: '0 0 60px rgba(52,211,153,0.3)',
                   }}
                 >
                   AETHER
                 </h1>
-                <p className="text-emerald-300/60 text-sm font-light tracking-wider ml-1">
+                <p className="text-emerald-300/60 text-xs md:text-sm font-light tracking-wider ml-1">
                   Voice-First Empathetic Companion
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-end md:self-auto">
                 <div className={`w-2 h-2 rounded-full ${uiVoiceState !== 'idle' ? 'bg-emerald-400 animate-pulse' : 'bg-emerald-600/50'}`} />
                 <span className="text-emerald-400/50 text-xs uppercase tracking-wider">
                   {uiVoiceState === 'idle' ? 'Ready' : 'Active'}
@@ -268,13 +325,13 @@ export const AetherUI = ({
         </div>
 
         {/* Central Orb Container */}
-        <div className="flex flex-col items-center justify-center space-y-10 -mt-16">
+        <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
           <div className="relative">
             {/* Outer pulsing rings */}
             {uiVoiceState === 'speaking' && (
               <>
-                <div className="absolute inset-0 -m-8 rounded-full bg-gradient-radial from-lime-500/20 to-transparent animate-pulse-slow pointer-events-none" />
-                <div className="absolute inset-0 -m-16 rounded-full bg-gradient-radial from-emerald-500/10 to-transparent animate-pulse-slower pointer-events-none" />
+                <div className="absolute inset-0 -m-6 md:-m-8 rounded-full bg-gradient-radial from-lime-500/20 to-transparent animate-pulse-slow pointer-events-none" />
+                <div className="absolute inset-0 -m-12 md:-m-16 rounded-full bg-gradient-radial from-emerald-500/10 to-transparent animate-pulse-slower pointer-events-none" />
               </>
             )}
             
@@ -309,7 +366,7 @@ export const AetherUI = ({
               ref={orbRef}
               onClick={handleInteraction}
               className={`
-                relative w-64 h-64 rounded-full
+                relative w-56 h-56 md:w-64 md:h-64 rounded-full
                 bg-gradient-to-br ${getOrbGradient()}
                 ${getOrbShadow()}
                 backdrop-blur-2xl
@@ -371,11 +428,11 @@ export const AetherUI = ({
           </div>
 
           {/* State Display with Animation */}
-          <div className="relative">
-            <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/50 to-teal-950/40 rounded-2xl px-10 py-5 border border-emerald-400/10 shadow-lg min-w-[280px]">
+          <div className="relative w-full max-w-[280px] md:max-w-none">
+            <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/50 to-teal-950/40 rounded-2xl px-6 md:px-10 py-4 md:py-5 border border-emerald-400/10 shadow-lg w-full md:min-w-[280px]">
               <div className="text-center space-y-1">
                 <p className={`
-                  text-xl font-light tracking-wide transition-all duration-500
+                  text-lg md:text-xl font-light tracking-wide transition-all duration-500
                   ${uiVoiceState === 'listening' ? 'text-emerald-300' : 
                     uiVoiceState === 'speaking' ? 'text-lime-300' :
                     uiVoiceState === 'processing' ? 'text-teal-300' :
@@ -383,7 +440,7 @@ export const AetherUI = ({
                 `}>
                   {getStateMessage().text}
                 </p>
-                <p className="text-emerald-400/50 text-sm font-light">
+                <p className="text-emerald-400/50 text-xs md:text-sm font-light">
                   {getStateMessage().subtext}
                 </p>
               </div>
@@ -403,7 +460,7 @@ export const AetherUI = ({
                       `}
                       style={{
                         animationDelay: `${i * 0.1}s`,
-                        height: uiVoiceState === 'speaking' ? `${Math.random() * 16 + 8}px` : '16px',
+                        height: uiVoiceState === 'speaking' ? `${((i * 1337) % 16) + 8}px` : '16px',
                       }}
                     />
                   ))}
@@ -415,28 +472,27 @@ export const AetherUI = ({
 
         {/* Footer with session info */}
         <div className="w-full max-w-2xl">
-          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/30 to-teal-950/20 rounded-[1.5rem] px-8 py-6 border border-emerald-400/5">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <p className="text-emerald-300/70 text-xs uppercase tracking-wider font-light">
+          <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/30 to-teal-950/20 rounded-2xl md:rounded-[1.5rem] px-6 md:px-8 py-4 md:py-6 border border-emerald-400/5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1 md:space-y-2 flex-1">
+                <p className="text-emerald-300/70 text-[10px] md:text-xs uppercase tracking-wider font-light">
                   Safe Space Mode
                 </p>
-                <p className="text-emerald-400/50 text-xs leading-relaxed max-w-md">
-                  I'm here to listen and reflect. Your thoughts are welcomed without judgment.
-                  Everything shared remains between us.
+                <p className="text-emerald-400/50 text-[10px] md:text-xs leading-relaxed md:max-w-md">
+                  {"I'm here to listen and reflect. Your thoughts are welcomed without judgment. Everything shared remains between us."}
                 </p>
               </div>
               <div className="flex items-center gap-4">
                 {/* Emotional tone indicator */}
                 <div className="flex flex-col items-center">
                   <div className={`
-                    w-12 h-12 rounded-full
+                    w-10 h-10 md:w-12 md:h-12 rounded-full
                     bg-gradient-to-br from-emerald-500/20 to-teal-500/20
                     border border-emerald-400/20
                     flex items-center justify-center
                   `}>
                     <div className={`
-                      w-6 h-6 rounded-full
+                      w-5 h-5 md:w-6 md:h-6 rounded-full
                       ${emotionalTone === 'calm' ? 'bg-emerald-500/50' :
                         emotionalTone === 'warm' ? 'bg-lime-500/50' :
                         emotionalTone === 'contemplative' ? 'bg-teal-500/50' :
@@ -444,7 +500,7 @@ export const AetherUI = ({
                       animate-pulse-slow
                     `} />
                   </div>
-                  <span className="text-emerald-500/40 text-[10px] uppercase tracking-wider mt-1">
+                  <span className="text-emerald-500/40 text-[10px] uppercase tracking-wider mt-1 hidden md:block">
                     {emotionalTone}
                   </span>
                 </div>
@@ -452,6 +508,8 @@ export const AetherUI = ({
             </div>
           </div>
         </div>
+
+        {/* Footer - Privacy Notice */}
       </div>
 
       {/* CSS Animations */}

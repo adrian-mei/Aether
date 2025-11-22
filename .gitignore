@@ -5,6 +5,9 @@
 
 # Testing
 /coverage
+/__tests__/coverage
+*.test.js.map
+*.test.ts.map
 
 # Next.js
 /.next/
@@ -34,3 +37,6 @@ next-env.d.ts
 
 # Models
 *.onnx
+
+# Documentation
+# Keep memory-bank/ tracked!

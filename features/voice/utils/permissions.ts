@@ -17,8 +17,9 @@ export async function requestMicrophonePermission(): Promise<boolean> {
     stream.getTracks().forEach(track => track.stop());
     logger.info('PERMISSIONS', 'Microphone permission granted.');
     return true;
-  } catch (err: any) {
-    logger.error('PERMISSIONS', 'Microphone permission denied or error.', { error: err.name, message: err.message }, err.stack);
+  } catch (err: unknown) {
+    const error = err as Error;
+    logger.error('PERMISSIONS', 'Microphone permission denied or error.', { error: error.name, message: error.message }, error.stack);
     return false;
   }
 }

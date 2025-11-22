@@ -5,7 +5,7 @@ export interface LogEntry {
   level: LogLevel;
   category: string;
   message: string;
-  data?: any;
+  data?: unknown;
   stack?: string;
 }
 
@@ -32,7 +32,7 @@ class AetherLogger {
     }
   }
 
-  private sanitize(data: any): any {
+  private sanitize(data: unknown): unknown {
     if (data === undefined) return undefined;
     try {
       // Handle circular references safely
@@ -46,7 +46,7 @@ class AetherLogger {
         }
         return value;
       }));
-    } catch (e) {
+    } catch {
       return String(data);
     }
   }
@@ -74,7 +74,7 @@ class AetherLogger {
     return `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}]: ${entry.message}`;
   }
 
-  public log(level: LogLevel, category: string, message: string, data?: any, stack?: string) {
+  public log(level: LogLevel, category: string, message: string, data?: unknown, stack?: string) {
     // Only log if Dev or Debug is enabled
     if (!this.isDev && !this.isDebugEnabled && level !== 'error') return;
 
@@ -91,7 +91,7 @@ class AetherLogger {
 
     // Console Output (use original data for browser console as it handles objs well)
     const formatted = this.format(entry);
-    const consoleArgs = [formatted];
+    const consoleArgs: unknown[] = [formatted];
     if (data) consoleArgs.push(data);
     if (stack) consoleArgs.push(`\n${stack}`);
 
@@ -106,10 +106,10 @@ class AetherLogger {
     this.addLog(entry);
   }
 
-  public info(category: string, message: string, data?: any) { this.log('info', category, message, data); }
-  public warn(category: string, message: string, data?: any) { this.log('warn', category, message, data); }
-  public error(category: string, message: string, data?: any, stack?: string) { this.log('error', category, message, data, stack); }
-  public debug(category: string, message: string, data?: any) { this.log('debug', category, message, data); }
+  public info(category: string, message: string, data?: unknown) { this.log('info', category, message, data); }
+  public warn(category: string, message: string, data?: unknown) { this.log('warn', category, message, data); }
+  public error(category: string, message: string, data?: unknown, stack?: string) { this.log('error', category, message, data, stack); }
+  public debug(category: string, message: string, data?: unknown) { this.log('debug', category, message, data); }
   
   public getLogs(): LogEntry[] {
     return [...this.logs];
@@ -117,7 +117,7 @@ class AetherLogger {
 
   public clearLogs() {
     this.logs = [];
-    this.listeners.forEach(l => {}); // Trigger update? 
+    this.listeners.forEach(() => {}); // Trigger update? 
     // Actually, DebugOverlay subscribes to *new* entries. 
     // It clears its own local state when clearLogs is called.
     // But other components calling getLogs() should see empty.
