@@ -5,9 +5,11 @@ import { useSessionManager } from '@/features/session/hooks/use-session-manager'
 import { AetherUI } from './aether-ui';
 import DebugOverlay from '@/shared/components/debug-overlay';
 import { testApiConnection } from '@/features/ai/services/chat-service';
+import { useExtensionDetector } from '@/features/session/hooks/use-extension-detector';
 
 export function SessionContainer() {
   const { state, actions } = useSessionManager();
+  useExtensionDetector();
 
   return (
     <main className="relative min-h-screen w-full overflow-hidden">
