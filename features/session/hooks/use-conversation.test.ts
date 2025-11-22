@@ -11,7 +11,6 @@ jest.mock('@/features/ai/services/chat-service', () => ({
 jest.mock('@/features/memory/services/memory-service');
 jest.mock('@/shared/lib/logger');
 jest.mock('@/features/session/hooks/use-message-queue', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useMessageQueue: () => ({
     handleChunk: jest.fn(),
     startStream: jest.fn(),

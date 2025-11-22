@@ -1,6 +1,5 @@
 import { KokoroService } from '@/features/voice/services/kokoro-service';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
-import { logger } from '@/shared/lib/logger';
 
 // Mock audio player
 jest.mock('@/features/voice/utils/audio-player', () => ({

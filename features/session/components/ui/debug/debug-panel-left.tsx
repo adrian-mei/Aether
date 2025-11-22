@@ -40,7 +40,7 @@ export function DebugPanelLeft({
               className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-xs text-slate-300 transition-colors"
             >
               <MessageSquare size={14} className="text-lime-400" />
-              <span>Simulate "Hello"</span>
+              <span>Simulate {'"Hello"'}</span>
             </button>
             <button
               onClick={onTestApi}

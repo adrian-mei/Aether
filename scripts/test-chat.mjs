@@ -76,7 +76,7 @@ async function chat(userInput) {
                       process.stdout.write(data.text);
                       fullResponse += data.text;
                   }
-              } catch (e) {
+              } catch {
                   // Ignore parse errors for partial chunks
               }
           }

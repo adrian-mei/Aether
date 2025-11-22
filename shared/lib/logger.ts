@@ -164,7 +164,7 @@ class AetherLogger {
              // IDB pruning is expensive. Let's just keep it simple.
          }
       }
-    } catch (e) {
+    } catch {
        // Ignore persistence errors
     }
   }
