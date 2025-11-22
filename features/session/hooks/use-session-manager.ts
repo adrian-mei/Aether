@@ -10,6 +10,7 @@ import { useSessionAccess } from './access/use-session-access';
 import { useBootSequence } from './lifecycle/use-boot-sequence';
 import { useConversation } from './chat/use-conversation';
 import { useConversationFlow } from './chat/use-conversation-flow';
+import { useInteractionLoop } from './logic/use-interaction-loop';
 
 export type SessionStatus = 'initializing' | 'awaiting-boot' | 'booting' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
@@ -33,36 +34,19 @@ export function useSessionManager() {
     }
   });
 
-  // Refs for circular dependency resolution
-  const onInputCompleteRef = useRef<(text: string) => void>(() => {});
-  const onSilenceRef = useRef<() => void>(() => {});
-  const resetRef = useRef<() => void>(() => {});
-
   // 3. Voice Agent
+  const voice = useVoiceInteraction();
   const { 
     state: voiceState,
     transcript,
-    lastInput,
-    silenceDetected,
     startListening, 
     stopListening, 
-    reset: resetVoice, 
     speak, 
     toggleMute
-  } = useVoiceInteraction();
+  } = voice;
 
-  // Handle Voice Events
-  useEffect(() => {
-      if (lastInput) {
-          onInputCompleteRef.current(lastInput.text);
-      }
-  }, [lastInput]);
-
-  useEffect(() => {
-      if (silenceDetected) {
-          onSilenceRef.current();
-      }
-  }, [silenceDetected]);
+  // Refs for callbacks
+  const resetRef = useRef<() => void>(() => {});
 
   // 4. Conversation Logic
   const conversation = useConversation({
@@ -83,45 +67,23 @@ export function useSessionManager() {
     startListening
   });
 
-  // Connect Refs
-  useEffect(() => {
-    onInputCompleteRef.current = async (text) => {
-        // Check limits
-        if (access.actions.incrementInteraction()) {
-            conversation.actions.handleInputComplete(text);
-        } else {
-            setStatus('limit-reached');
-            const limitMsg = "I have enjoyed our time together. To continue our journey, please join the waitlist.";
-            await speak(limitMsg, { autoResume: false });
-            resetRef.current();
-        }
-    };
-    
-    onSilenceRef.current = conversation.actions.handleSilence;
-  }, [access.actions, conversation.actions, speak]);
+  // 6. Interaction Loop (The Wiring)
+  useInteractionLoop({
+    voice,
+    conversation,
+    access,
+    status,
+    resetSession: () => resetRef.current()
+  });
 
+  // Update Reset Ref
   useEffect(() => {
       resetRef.current = () => {
-          resetVoice();
+          voice.reset();
           conversation.actions.resetConversation();
+          setStatus('idle');
       };
-  }, [resetVoice, conversation.actions]);
-
-  // Watchdog for timeout (30s no activity)
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    if (voiceState === 'processing') {
-      intervalId = setInterval(() => {
-        const elapsed = Date.now() - conversation.actions.getLastActivity();
-        if (elapsed > 30000) {
-          logger.warn('SESSION', 'Request timed out (no activity)', { elapsedMs: elapsed });
-          resetVoice();
-          logger.info('SESSION', 'Chat ended (watchdog timeout)');
-        }
-      }, 1000);
-    }
-    return () => clearInterval(intervalId);
-  }, [voiceState, resetVoice, conversation.actions]);
+  }, [voice, conversation.actions]);
 
   // Initialization Logic
   useEffect(() => {
@@ -161,9 +123,6 @@ export function useSessionManager() {
 
     boot.actions.setPermissionStatus('pending');
     await boot.actions.retryPermission().then(() => true).catch(() => false);
-    // Note: retryPermission sets state but we need to know result here. 
-    // Actually boot.actions.retryPermission calls onComplete(true) if granted.
-    // So we just need to call it.
   };
 
   const toggleListening = () => {
@@ -185,11 +144,11 @@ export function useSessionManager() {
   };
 
   useEffect(() => {
-    // Force enable debug mode by default for analysis if not set
+    // Default to false if not set
     let debugStr = localStorage.getItem('aether_debug');
     if (debugStr === null) {
-        debugStr = 'true';
-        localStorage.setItem('aether_debug', 'true');
+        debugStr = 'false';
+        localStorage.setItem('aether_debug', 'false');
     }
     
     const isEnabled = debugStr === 'true';

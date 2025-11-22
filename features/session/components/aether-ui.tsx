@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VoiceInteractionState } from '@/features/voice/hooks/core/use-voice-interaction';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
@@ -38,6 +38,7 @@ interface AetherUIProps {
   onToggleListening: () => void;
   onBypass: (code: string) => Promise<boolean>;
   onSimulateInput: (text: string) => void;
+  onToggleDebug: () => void;
 }
 
 export const AetherUI = ({ 
@@ -55,7 +56,8 @@ export const AetherUI = ({
   onStartSession, 
   onToggleListening,
   onBypass,
-  onSimulateInput
+  onSimulateInput,
+  onToggleDebug
 }: AetherUIProps) => {
   const [isModalDismissed, setIsModalDismissed] = useState(false);
   
@@ -77,6 +79,19 @@ export const AetherUI = ({
   });
   
   const { playOcean } = useSessionAudio({ sessionStatus });
+
+  // Keyboard shortcut for debug toggle (Cmd/Ctrl + .)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+        e.preventDefault();
+        onToggleDebug();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onToggleDebug]);
 
   // Reset modal dismissal when status changes to limit-reached
   // Logic: Using derived state pattern to avoid effect-based state updates

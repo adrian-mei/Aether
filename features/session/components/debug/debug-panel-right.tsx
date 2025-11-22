@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { logger, LogEntry } from '@/shared/lib/logger';
-import { Search, Trash2, Copy, Check, ChevronRight, ChevronDown } from 'lucide-react';
+import { Search, Trash2, Copy, Check, ChevronRight, ChevronDown, Filter } from 'lucide-react';
 
 export function DebugPanelRight() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -76,58 +76,63 @@ export function DebugPanelRight() {
   };
 
   return (
-    <div className="absolute right-4 top-24 bottom-24 w-96 bg-[#1e1e1e] backdrop-blur-md border border-white/10 rounded-lg flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4 hidden md:flex shadow-2xl">
-      {/* Toolbar - "Monokai/Sublime" Header Style */}
-      <div className="p-2 border-b border-white/5 bg-[#252526] flex items-center justify-between gap-2">
-        <div className="flex items-center bg-[#3c3c3c] rounded px-2 py-1 border border-transparent focus-within:border-[#007acc] flex-1 transition-all">
-            <Search size={12} className="text-gray-400 mr-2" />
+    <div className="absolute right-6 top-24 bottom-24 w-[32rem] bg-[#1e1e1e]/95 backdrop-blur-xl border border-white/10 rounded-xl flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4 hidden md:flex shadow-2xl">
+      {/* Toolbar */}
+      <div className="p-3 border-b border-white/5 bg-[#252526]/50 flex items-center justify-between gap-3">
+        <div className="flex items-center bg-[#1a1a1a] rounded-lg px-3 py-1.5 border border-white/5 focus-within:border-indigo-500/50 flex-1 transition-all">
+            <Search size={14} className="text-gray-500 mr-2" />
             <input 
                 type="text" 
-                placeholder="Filter..." 
+                placeholder="Filter logs..." 
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
-                className="bg-transparent border-none outline-none text-[11px] w-full text-gray-200 placeholder-gray-500 font-mono"
+                className="bg-transparent border-none outline-none text-xs w-full text-gray-200 placeholder-gray-600 font-mono"
             />
         </div>
         
         <div className="flex items-center gap-1">
             <button 
                 onClick={() => setShowVerbose(!showVerbose)}
-                className={`px-2 py-1 rounded text-[9px] font-bold font-mono border transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-colors ${
                   showVerbose
-                    ? 'bg-[#0e639c] text-white border-[#0e639c]' 
-                    : 'text-gray-400 border-transparent hover:bg-[#2d2d2d]'
+                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
+                    : 'text-gray-500 border border-transparent hover:bg-white/5'
                 }`}
+                title="Toggle Verbose Logging"
             >
+                <Filter size={12} />
                 {showVerbose ? 'ALL' : 'IMP'}
             </button>
             
+            <div className="h-4 w-[1px] bg-white/10 mx-1" />
+
             <button 
                 onClick={handleCopyLogs} 
-                className={`p-1.5 rounded transition-colors ${isCopied ? 'text-green-400 bg-green-500/10' : 'text-gray-400 hover:text-white hover:bg-[#2d2d2d]'}`} 
+                className={`p-1.5 rounded-md transition-colors ${isCopied ? 'text-green-400 bg-green-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`} 
                 title="Copy Logs"
             >
-                {isCopied ? <Check size={12} /> : <Copy size={12} />}
+                {isCopied ? <Check size={14} /> : <Copy size={14} />}
             </button>
             
             <button 
                 onClick={clearLogs} 
-                className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-[#2d2d2d] transition-colors" 
+                className="p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors" 
                 title="Clear Logs"
             >
-                <Trash2 size={12} />
+                <Trash2 size={14} />
             </button>
         </div>
       </div>
 
-      {/* Log List - "Code Editor" Look */}
+      {/* Log List */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-1 space-y-[1px] font-mono text-[10px] bg-[#1e1e1e]"
+        className="flex-1 overflow-y-auto p-2 space-y-1 font-mono text-xs bg-[#1e1e1e]/50"
       >
         {getFilteredLogs().length === 0 && (
-          <div className="text-gray-500 italic text-center py-8 text-[11px]">
-            {filterText ? 'No matching logs' : 'No logs yet'}
+          <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-2">
+            <Activity size={24} className="opacity-20" />
+            <span className="text-xs">{filterText ? 'No matching logs found' : 'Waiting for activity...'}</span>
           </div>
         )}
         
@@ -139,59 +144,60 @@ export function DebugPanelRight() {
   );
 }
 
+import { Activity } from 'lucide-react';
+
 function LogItem({ log }: { log: LogEntry }) {
     const [isExpanded, setIsExpanded] = useState(false);
     const hasData = !!log.data;
     
-    // VS Code / Sublime Inspired Colors
-    const timeColor = 'text-[#858585]'; // Comment gray
-    
-    // Category Colors
+    // Modernized Colors
     const getCategoryColor = (cat: string) => {
         switch(cat) {
-            case 'VOICE': return 'text-[#ce9178]'; // String/Orange
-            case 'AI': return 'text-[#569cd6]'; // Keyword/Blue
-            case 'APP': return 'text-[#4ec9b0]'; // Class/Teal
-            case 'SESSION': return 'text-[#c586c0]'; // Control/Purple
-            default: return 'text-[#d4d4d4]'; // Default text
+            case 'VOICE': return 'text-orange-300'; 
+            case 'AI': return 'text-blue-300'; 
+            case 'APP': return 'text-emerald-300'; 
+            case 'SESSION': return 'text-purple-300'; 
+            default: return 'text-gray-400';
         }
     };
 
-    const messageColor = log.level === 'error' ? 'text-[#f44747]' : // Red
-                         log.level === 'warn' ? 'text-[#cca700]' :  // Yellow
-                         'text-[#d4d4d4]'; // Default Light
+    const messageColor = log.level === 'error' ? 'text-red-400' : 
+                         log.level === 'warn' ? 'text-yellow-400' : 
+                         'text-gray-300';
 
     return (
-        <div className="group hover:bg-[#2a2d2e] rounded-sm px-1 py-0.5 transition-colors">
+        <div className={`group rounded px-2 py-1 transition-colors ${isExpanded ? 'bg-white/5' : 'hover:bg-white/[0.02]'}`}>
             <div 
-                className="flex items-start gap-2 cursor-pointer"
+                className="flex items-start gap-3 cursor-pointer select-none"
                 onClick={() => hasData && setIsExpanded(!isExpanded)}
             >
                 {/* Timestamp */}
-                <span className={`${timeColor} shrink-0 w-14 select-none`}>
+                <span className="text-gray-600 text-[10px] pt-0.5 shrink-0 w-16 tabular-nums">
                     {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </span>
 
-                {/* Expand Icon */}
-                <span className={`shrink-0 w-3 mt-0.5 ${hasData ? 'text-gray-500' : 'opacity-0'}`}>
-                    {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                </span>
-
-                {/* Category */}
-                <span className={`${getCategoryColor(log.category)} shrink-0 w-12 font-bold select-none`}>
+                {/* Category Indicator */}
+                <div className={`shrink-0 w-16 font-bold text-[10px] tracking-wide pt-0.5 ${getCategoryColor(log.category)}`}>
                     {log.category}
-                </span>
+                </div>
 
                 {/* Message */}
-                <div className={`flex-1 break-words ${messageColor}`}>
+                <div className={`flex-1 break-words leading-relaxed ${messageColor}`}>
                     {log.message}
                 </div>
+
+                {/* Expand Icon */}
+                {hasData && (
+                    <span className={`shrink-0 pt-1 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                        <ChevronDown size={12} />
+                    </span>
+                )}
             </div>
 
-            {/* Data View - Subline/Expanded */}
+            {/* Data View */}
             {hasData && isExpanded && (
-                <div className="pl-[7.5rem] pr-2 py-1 overflow-x-auto">
-                    <pre className="text-[#9cdcfe] bg-[#1e1e1e] p-1 rounded border-l-2 border-[#404040] text-[9px] leading-relaxed whitespace-pre-wrap break-all">
+                <div className="mt-2 mb-1 ml-[5.5rem] mr-2">
+                    <pre className="text-blue-200/80 bg-black/30 p-3 rounded-lg border border-white/5 text-[10px] leading-relaxed whitespace-pre-wrap break-all shadow-inner">
                         {typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data)}
                     </pre>
                 </div>

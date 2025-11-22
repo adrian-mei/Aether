@@ -27,6 +27,7 @@ export function SessionContainer() {
         onToggleListening={actions.toggleListening}
         onBypass={actions.verifyAccessCode}
         onSimulateInput={actions.handleInputComplete}
+        onToggleDebug={actions.toggleDebug}
       />
 
       <DebugControls 

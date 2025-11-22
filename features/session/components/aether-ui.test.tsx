@@ -34,6 +34,7 @@ describe('AetherUI', () => {
     onToggleListening: jest.fn(),
     onBypass: jest.fn(),
     onSimulateInput: jest.fn(),
+    onToggleDebug: jest.fn(),
   };
 
   it('shows transcript when listening', () => {

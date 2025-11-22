@@ -1,6 +1,6 @@
 'use client';
 
-import { Network, MessageSquare, Activity, Mic, Shield, Database } from 'lucide-react';
+import { Network, MessageSquare, Activity, Mic, Shield, Database, Coins } from 'lucide-react';
 import { VoiceInteractionState } from '@/features/voice/hooks/core/use-voice-interaction';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
@@ -27,29 +27,29 @@ export function DebugPanelLeft({
   onSimulateInput
 }: DebugPanelLeftProps) {
   return (
-    <div className="absolute left-4 top-24 bottom-24 w-64 bg-black/20 backdrop-blur-sm border border-white/5 rounded-lg flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-left-4 hidden md:flex">
+    <div className="absolute left-6 top-24 bottom-24 w-64 bg-[#1e1e1e]/95 backdrop-blur-xl border border-white/10 rounded-xl flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-left-4 hidden md:flex shadow-2xl">
       {/* Header */}
-      <div className="p-3 border-b border-white/5 bg-black/20">
-        <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Controls & State</h3>
+      <div className="p-3 border-b border-white/5 bg-[#252526]/50">
+        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Controls & State</h3>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-6">
         {/* Actions Section */}
         <div className="space-y-2">
-          <h4 className="text-[10px] font-bold text-slate-500 uppercase">Actions</h4>
+          <h4 className="text-[9px] font-bold text-gray-600 uppercase tracking-wider pl-1">Actions</h4>
           <div className="grid grid-cols-1 gap-2">
             <button
               onClick={() => onSimulateInput("Hello Aether")}
-              className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-xs text-slate-300 transition-colors"
+              className="flex items-center gap-3 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors border border-transparent hover:border-white/5 group"
             >
-              <MessageSquare size={14} className="text-lime-400" />
+              <MessageSquare size={14} className="text-lime-400 opacity-80 group-hover:opacity-100" />
               <span>Simulate {'"Hello"'}</span>
             </button>
             <button
               onClick={onTestApi}
-              className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded text-xs text-slate-300 transition-colors"
+              className="flex items-center gap-3 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors border border-transparent hover:border-white/5 group"
             >
-              <Network size={14} className="text-emerald-400" />
+              <Network size={14} className="text-emerald-400 opacity-80 group-hover:opacity-100" />
               <span>Test API Connection</span>
             </button>
           </div>
@@ -57,37 +57,37 @@ export function DebugPanelLeft({
 
         {/* State Monitors */}
         <div className="space-y-2">
-          <h4 className="text-[10px] font-bold text-slate-500 uppercase">System State</h4>
+          <h4 className="text-[9px] font-bold text-gray-600 uppercase tracking-wider pl-1">System State</h4>
           
           {/* Session Status */}
-          <div className="bg-black/20 rounded p-2 space-y-1">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Activity size={12} />
+          <div className="bg-black/20 rounded-lg p-2.5 space-y-1.5 border border-white/5">
+            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">
+              <Activity size={10} />
               <span>Session Status</span>
             </div>
-            <div className="font-mono text-xs text-green-400 break-words">
+            <div className="font-mono text-xs text-green-400 break-words pl-5">
               {sessionStatus}
             </div>
           </div>
 
           {/* Voice State */}
-          <div className="bg-black/20 rounded p-2 space-y-1">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Mic size={12} />
+          <div className="bg-black/20 rounded-lg p-2.5 space-y-1.5 border border-white/5">
+            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">
+              <Mic size={10} />
               <span>Voice State</span>
             </div>
-            <div className="font-mono text-xs text-purple-300 break-words">
+            <div className="font-mono text-xs text-purple-300 break-words pl-5">
               {voiceState}
             </div>
           </div>
 
           {/* Permissions */}
-          <div className="bg-black/20 rounded p-2 space-y-1">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Shield size={12} />
+          <div className="bg-black/20 rounded-lg p-2.5 space-y-1.5 border border-white/5">
+            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">
+              <Shield size={10} />
               <span>Permissions</span>
             </div>
-            <div className={`font-mono text-xs break-words ${
+            <div className={`font-mono text-xs break-words pl-5 ${
                 permissionStatus === 'granted' ? 'text-green-400' : 
                 permissionStatus === 'denied' ? 'text-red-400' : 'text-amber-400'
             }`}>
@@ -96,38 +96,42 @@ export function DebugPanelLeft({
           </div>
 
           {/* Model Cache */}
-          <div className="bg-black/20 rounded p-2 space-y-1">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Database size={12} />
+          <div className="bg-black/20 rounded-lg p-2.5 space-y-1.5 border border-white/5">
+            <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">
+              <Database size={10} />
               <span>Model Cache</span>
             </div>
-            <div className={`font-mono text-xs ${
+            <div className={`font-mono text-xs pl-5 ${
                 modelCacheStatus === 'cached' ? 'text-green-400' : 
-                modelCacheStatus === 'missing' ? 'text-red-400' : 'text-slate-400'
+                modelCacheStatus === 'missing' ? 'text-red-400' : 'text-gray-400'
             }`}>
               {modelCacheStatus}
             </div>
           </div>
 
-          {/* Token Usage */}
+          {/* Token Usage - Simplified View */}
           {tokenUsage && (
-            <div className="bg-black/20 rounded p-2 space-y-1">
-              <h5 className="text-[9px] font-bold text-slate-500 uppercase">Token Usage</h5>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono">
-                <span className="text-slate-400">Input:</span>
-                <span className="text-slate-300 text-right">{isNaN(tokenUsage.promptTokens) ? 0 : tokenUsage.promptTokens}</span>
-                
-                <span className="text-slate-400">Output:</span>
-                <span className="text-slate-300 text-right">{isNaN(tokenUsage.completionTokens) ? 0 : tokenUsage.completionTokens}</span>
-                
-                <span className="text-slate-400">Total:</span>
-                <span className="text-indigo-300 text-right">{isNaN(tokenUsage.totalTokens) ? 0 : tokenUsage.totalTokens}</span>
+            <div className="bg-black/20 rounded-lg p-2.5 space-y-2 border border-white/5">
+              <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase tracking-wide font-bold">
+                <Coins size={10} />
+                <span>Resources</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 pl-1">
+                <div className="flex flex-col">
+                   <span className="text-[9px] text-gray-600">Tokens</span>
+                   <span className="text-xs font-mono text-indigo-300">
+                     {isNaN(tokenUsage.totalTokens) ? 0 : tokenUsage.totalTokens.toLocaleString()}
+                   </span>
+                </div>
                 
                 {tokenUsage.cost && (
-                  <>
-                    <span className="text-slate-400">Cost:</span>
-                    <span className="text-green-400 text-right">{tokenUsage.cost}</span>
-                  </>
+                  <div className="flex flex-col">
+                     <span className="text-[9px] text-gray-600">Est. Cost</span>
+                     <span className="text-xs font-mono text-green-400">
+                       {tokenUsage.cost}
+                     </span>
+                  </div>
                 )}
               </div>
             </div>
