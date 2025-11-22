@@ -2,8 +2,8 @@
 
 import { useSessionManager } from '@/features/session/hooks/use-session-manager';
 import { AetherUI } from './aether-ui';
-import { useExtensionDetector } from '@/features/session/hooks/use-extension-detector';
-import { DebugControls } from '@/shared/components/debug-controls';
+import { useExtensionDetector } from '@/features/system/hooks/use-extension-detector';
+import { DebugControls } from './debug/debug-controls';
 
 export function SessionContainer() {
   const { state, actions } = useSessionManager();

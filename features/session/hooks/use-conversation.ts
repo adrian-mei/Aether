@@ -5,7 +5,7 @@ import type { ChatMessage, TokenUsage } from '@/features/ai/types/chat.types';
 import type { Memory } from '@/features/memory/types/memory.types';
 import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
 import { memoryService } from '@/features/memory/services/memory-service';
-import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
+import { useMessageQueue } from '@/features/session/hooks/utils/use-message-queue';
 
 interface UseConversationProps {
   accessCode: string;

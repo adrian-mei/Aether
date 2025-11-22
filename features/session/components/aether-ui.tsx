@@ -6,21 +6,21 @@ import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
 import type { TokenUsage } from '@/features/ai/types/chat.types';
-import { WaitlistModal } from './waitlist-modal';
+import { WaitlistModal } from './modals/waitlist-modal';
 import { chatService } from '@/features/ai/services/chat-service';
 
 // Hooks
-import { useAetherVisuals } from '../hooks/use-aether-visuals';
-import { useSessionAudio } from '../hooks/use-session-audio';
+import { useAetherVisuals } from '../hooks/visuals/use-aether-visuals';
+import { useSessionAudio } from '../hooks/audio/use-session-audio';
 
 // Sub-components
-import { Header } from './ui/header';
-import { Footer } from './ui/footer';
-import { BackgroundOrbs } from './ui/background-orbs';
-import { OrbContainer } from './ui/orb-container';
-import { StatusDisplay } from './ui/status-display';
-import { DebugPanelLeft } from './ui/debug/debug-panel-left';
-import { DebugPanelRight } from './ui/debug/debug-panel-right';
+import { Header } from './layouts/header';
+import { Footer } from './layouts/footer';
+import { BackgroundOrbs } from './visuals/background-orbs';
+import { OrbContainer } from './visuals/orb-container';
+import { StatusDisplay } from './status/status-display';
+import { DebugPanelLeft } from './debug/debug-panel-left';
+import { DebugPanelRight } from './debug/debug-panel-right';
 
 interface AetherUIProps {
   voiceState: VoiceAgentState;
@@ -60,7 +60,22 @@ export const AetherUI = ({
   const [isModalDismissed, setIsModalDismissed] = useState(false);
   
   // Custom Hooks
-  const { uiVoiceState, emotionalTone, breatheIntensity } = useAetherVisuals({ sessionStatus, voiceState });
+  const { 
+    uiVoiceState, 
+    emotionalTone, 
+    breatheIntensity,
+    visualStatus 
+  } = useAetherVisuals({ 
+    sessionStatus, 
+    voiceState,
+    permissionStatus,
+    modelCacheStatus,
+    downloadProgress,
+    currentAssistantMessage,
+    currentMessageDuration,
+    transcript
+  });
+  
   const { playOcean } = useSessionAudio({ sessionStatus });
 
   // Reset modal dismissal when status changes to limit-reached
@@ -154,13 +169,8 @@ export const AetherUI = ({
 
             <StatusDisplay 
                 uiVoiceState={uiVoiceState}
-                sessionStatus={sessionStatus}
-                permissionStatus={permissionStatus}
-                modelCacheStatus={modelCacheStatus}
-                downloadProgress={downloadProgress}
+                visualStatus={visualStatus}
                 currentAssistantMessage={currentAssistantMessage}
-                currentMessageDuration={currentMessageDuration}
-                transcript={transcript}
                 turnCount={turnCount}
             />
         </div>

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useOceanSound } from './use-ocean-sound';
 import { useWakingSound } from './use-waking-sound';
-import { useWakeLock } from './use-wake-lock';
-import { SessionStatus } from './use-session-manager';
+import { useWakeLock } from '../utils/use-wake-lock';
+import { SessionStatus } from '../use-session-manager';
 
 interface UseSessionAudioProps {
   sessionStatus: SessionStatus;

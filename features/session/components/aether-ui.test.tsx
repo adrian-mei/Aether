@@ -4,19 +4,19 @@ import { AetherUI } from '@/features/session/components/aether-ui';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 
 // Mock sub-components to simplify testing
-jest.mock('@/features/session/components/waitlist-modal', () => ({
+jest.mock('@/features/session/components/modals/waitlist-modal', () => ({
   WaitlistModal: () => <div data-testid="waitlist-modal" />
 }));
 
-jest.mock('@/features/session/hooks/use-ocean-sound', () => ({
+jest.mock('@/features/session/hooks/audio/use-ocean-sound', () => ({
   useOceanSound: () => ({ play: jest.fn() })
 }));
 
-jest.mock('@/features/session/hooks/use-waking-sound', () => ({
+jest.mock('@/features/session/hooks/audio/use-waking-sound', () => ({
   useWakingSound: () => ({ playWakingSound: jest.fn() })
 }));
 
-jest.mock('@/features/session/hooks/use-wake-lock', () => ({
+jest.mock('@/features/session/hooks/utils/use-wake-lock', () => ({
   useWakeLock: () => ({ requestWakeLock: jest.fn(), releaseWakeLock: jest.fn() })
 }));
 
@@ -28,9 +28,12 @@ describe('AetherUI', () => {
     modelCacheStatus: 'cached' as const,
     downloadProgress: null,
     transcript: '',
+    turnCount: 0,
+    isDebugMode: false,
     onStartSession: jest.fn(),
     onToggleListening: jest.fn(),
     onBypass: jest.fn(),
+    onSimulateInput: jest.fn(),
   };
 
   it('shows transcript when listening', () => {
@@ -64,14 +67,12 @@ describe('AetherUI', () => {
     // < 60: Calibrating Empathy Engine...
     
     // Let's check 50% text logic in aether-ui.tsx:
-    // else if (downloadProgress < 60) text = "Calibrating Empathy Engine...";
-    
-    // So 50% should be "Calibrating Empathy Engine..."
+    // It should now be "Initializing..." due to simplified logic in useAetherVisuals
     
     // Expected behavior (fix): Should show progress text
     // Current behavior (bug): Shows "Requesting Access"
     
-    expect(screen.getByText('Calibrating Empathy Engine...')).toBeInTheDocument();
+    expect(screen.getByText('Initializing...')).toBeInTheDocument();
     expect(screen.getByText('50% Complete')).toBeInTheDocument();
     
     // Should NOT show Requesting Access
@@ -86,8 +87,8 @@ describe('AetherUI', () => {
 
   it('shows listening state message correctly', () => {
     render(<AetherUI {...defaultProps} voiceState="listening" />);
-    expect(screen.getByText('I hear you')).toBeInTheDocument();
-    expect(screen.getByText("Share what's on your mind")).toBeInTheDocument();
+    expect(screen.getByText("I'm listening")).toBeInTheDocument();
+    expect(screen.getByText("Go ahead, it's your turn")).toBeInTheDocument();
   });
 
   it('shows speaking state message correctly', () => {
