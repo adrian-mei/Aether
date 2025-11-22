@@ -6,6 +6,7 @@ import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
 import { WaitlistModal } from './waitlist-modal';
+import { chatService } from '@/features/ai/services/chat-service';
 
 // Hooks
 import { useAetherVisuals } from '../hooks/use-aether-visuals';
@@ -17,6 +18,8 @@ import { Footer } from './ui/footer';
 import { BackgroundOrbs } from './ui/background-orbs';
 import { OrbContainer } from './ui/orb-container';
 import { StatusDisplay } from './ui/status-display';
+import { DebugPanelLeft } from './ui/debug/debug-panel-left';
+import { DebugPanelRight } from './ui/debug/debug-panel-right';
 
 interface AetherUIProps {
   voiceState: VoiceAgentState;
@@ -28,9 +31,11 @@ interface AetherUIProps {
   currentMessageDuration?: number;
   transcript?: string;
   turnCount: number;
+  isDebugMode: boolean;
   onStartSession: () => void;
   onToggleListening: () => void;
   onBypass: (code: string) => Promise<boolean>;
+  onSimulateInput: (text: string) => void;
 }
 
 export const AetherUI = ({ 
@@ -43,9 +48,11 @@ export const AetherUI = ({
   currentMessageDuration,
   transcript,
   turnCount,
+  isDebugMode,
   onStartSession, 
   onToggleListening,
-  onBypass
+  onBypass,
+  onSimulateInput
 }: AetherUIProps) => {
   const [isModalDismissed, setIsModalDismissed] = useState(false);
   
@@ -115,6 +122,21 @@ export const AetherUI = ({
       <div className="relative z-10 flex flex-col items-center justify-between h-full px-4 py-4 md:px-6 md:py-8 pb-safe">
         
         <Header uiVoiceState={uiVoiceState} />
+
+        {/* Integrated Debug Panels */}
+        {isDebugMode && (
+          <>
+            <DebugPanelLeft 
+              voiceState={voiceState}
+              permissionStatus={permissionStatus}
+              sessionStatus={sessionStatus}
+              modelCacheStatus={modelCacheStatus}
+              onTestApi={() => chatService.testApiConnection()}
+              onSimulateInput={onSimulateInput}
+            />
+            <DebugPanelRight />
+          </>
+        )}
 
         {/* Central Orb Container */}
         <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
