@@ -81,7 +81,7 @@ export function useVoiceAgent(
     setState('idle');
   }, [stopSR, stopTTS]);
 
-  const speak = useCallback(async (text: string, options: { autoResume?: boolean } = { autoResume: true }) => {
+  const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: () => void } = { autoResume: true }) => {
       // Stop listening while speaking
       stopSR();
       setState('speaking');

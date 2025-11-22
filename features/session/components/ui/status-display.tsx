@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
+import { ResponseFeedback } from './response-feedback';
+import { logger } from '@/shared/lib/logger';
+import { useTypewriter } from '@/features/session/hooks/use-typewriter';
 
 interface StatusDisplayProps {
   uiVoiceState: string;
@@ -11,6 +14,7 @@ interface StatusDisplayProps {
   downloadProgress: number | null;
   currentAssistantMessage?: string;
   transcript?: string;
+  turnCount: number;
 }
 
 export const StatusDisplay = ({
@@ -21,7 +25,38 @@ export const StatusDisplay = ({
   downloadProgress,
   currentAssistantMessage,
   transcript,
+  turnCount,
 }: StatusDisplayProps) => {
+  const [hasGivenFeedback, setHasGivenFeedback] = useState(false);
+  const [shouldShowFeedback, setShouldShowFeedback] = useState(false);
+  const [lastMessage, setLastMessage] = useState<string | undefined>(undefined);
+  
+  // Apply typewriter effect to assistant message
+  const animatedAssistantMessage = useTypewriter(currentAssistantMessage, 25, 500);
+
+  // Reset feedback state when message changes
+  useEffect(() => {
+    if (currentAssistantMessage && currentAssistantMessage !== lastMessage) {
+      setHasGivenFeedback(false);
+      setLastMessage(currentAssistantMessage);
+      
+      // Logic: Only ask for feedback after 5 turns, and then randomly (30% chance)
+      if (turnCount > 5) {
+          setShouldShowFeedback(Math.random() < 0.3);
+      } else {
+          setShouldShowFeedback(false);
+      }
+    }
+  }, [currentAssistantMessage, lastMessage, turnCount]);
+
+  const handleFeedback = (type: 'positive' | 'neutral') => {
+    setHasGivenFeedback(true);
+    logger.info('feedback', 'User provided feedback', { 
+      rating: type, 
+      message: currentAssistantMessage 
+    });
+  };
+
   const getStateMessage = () => {
     if (sessionStatus === 'insecure-context') {
         return { text: 'Connection Not Secure', subtext: 'Please use HTTPS or localhost' };
@@ -62,30 +97,36 @@ export const StatusDisplay = ({
     
     if (sessionStatus === 'awaiting-boot') {
         return { 
-            text: 'Tap to Initialize', 
+            text: 'Tap Orb to Begin', 
             subtext: modelCacheStatus === 'missing' ? 'Download Engine (300MB)' : 'System Boot Sequence' 
         };
     }
 
     const messages: Record<string, { text: string; subtext: string }> = {
       idle: { text: 'Ready to listen', subtext: 'Tap to begin' },
-      listening: { text: 'I hear you', subtext: 'Share what\'s on your mind' },
+      listening: { text: 'I\'m listening', subtext: 'Go ahead, it\'s your turn' },
       processing: { text: 'Reflecting', subtext: 'Taking in your words' },
       speaking: { text: 'Here with you', subtext: 'Let me mirror that back' },
       muted: { text: 'Paused', subtext: 'Tap to resume' },
       error: { text: 'Connection Issue', subtext: 'Tap to retry' },
     };
 
-    // Override for speaking state if we have a message
-    if (uiVoiceState === 'speaking' && currentAssistantMessage) {
-        return { text: currentAssistantMessage, subtext: 'Aether' };
-    }
-
+    // 1. User Input (Highest Priority)
     // Override for listening/processing state if we have a transcript (overlay)
     if ((uiVoiceState === 'listening' || uiVoiceState === 'processing') && transcript) {
         return { text: transcript, subtext: uiVoiceState === 'processing' ? 'Thinking...' : 'Listening...' };
     }
 
+    // 2. Assistant Output (Priority until fully typed)
+    // Show assistant message if speaking OR if typing is still in progress (due to delay)
+    const isTyping = currentAssistantMessage && animatedAssistantMessage !== currentAssistantMessage;
+    const shouldShowAssistant = currentAssistantMessage && (uiVoiceState === 'speaking' || isTyping);
+
+    if (shouldShowAssistant) {
+        return { text: animatedAssistantMessage, subtext: 'Aether' };
+    }
+
+    // 3. State Message (Lowest Priority)
     return messages[uiVoiceState] || messages.idle;
   };
 
@@ -129,6 +170,11 @@ export const StatusDisplay = ({
               />
             ))}
           </div>
+        )}
+
+        {/* Feedback Control */}
+        {uiVoiceState === 'speaking' && currentAssistantMessage && shouldShowFeedback && !hasGivenFeedback && (
+          <ResponseFeedback onFeedback={handleFeedback} />
         )}
       </div>
     </div>

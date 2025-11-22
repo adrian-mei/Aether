@@ -14,7 +14,7 @@ export function useTTS() {
     };
   }, []);
 
-  const speak = useCallback(async (text: string, options: { autoResume?: boolean } = { autoResume: true }, onComplete?: () => void) => {
+  const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: () => void } = { autoResume: true }, onComplete?: () => void) => {
     // Interruption handling
     if (synth?.speaking) {
         logger.info('VOICE', 'Interrupting current speech');
@@ -32,7 +32,10 @@ export function useTTS() {
         const playbackPromise = await kokoroService.speak(
             text, 
             voiceId,
-            () => setIsSpeaking(true)
+            () => {
+                setIsSpeaking(true);
+                if (options.onStart) options.onStart();
+            }
         );
         
         if (playbackPromise !== undefined) {
@@ -69,6 +72,10 @@ export function useTTS() {
     utterance.rate = 1.0; 
     utterance.pitch = 1.2; 
     utterance.volume = 1.0;
+
+    utterance.onstart = () => {
+        if (options.onStart) options.onStart();
+    };
 
     utterance.onend = () => {
       logger.info('VOICE', 'Speech synthesis ended');

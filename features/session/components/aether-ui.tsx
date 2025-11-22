@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
@@ -26,6 +26,7 @@ interface AetherUIProps {
   downloadProgress: number | null;
   currentAssistantMessage?: string;
   transcript?: string;
+  turnCount: number;
   onStartSession: () => void;
   onToggleListening: () => void;
   onBypass: (code: string) => Promise<boolean>;
@@ -39,6 +40,7 @@ export const AetherUI = ({
   downloadProgress,
   currentAssistantMessage,
   transcript,
+  turnCount,
   onStartSession, 
   onToggleListening,
   onBypass
@@ -50,9 +52,11 @@ export const AetherUI = ({
   const { playOcean } = useSessionAudio({ sessionStatus });
 
   // Reset modal dismissal when status changes to limit-reached
-  if (sessionStatus === 'limit-reached' && isModalDismissed) {
-    setIsModalDismissed(false);
-  }
+  useEffect(() => {
+    if (sessionStatus === 'limit-reached') {
+      setIsModalDismissed(false);
+    }
+  }, [sessionStatus]);
 
   const handleInteraction = () => {
     if (sessionStatus === 'limit-reached') {
@@ -128,6 +132,7 @@ export const AetherUI = ({
                 downloadProgress={downloadProgress}
                 currentAssistantMessage={currentAssistantMessage}
                 transcript={transcript}
+                turnCount={turnCount}
             />
         </div>
 

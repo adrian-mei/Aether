@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Lock, Compass, AlertCircle } from 'lucide-react';
+import { Lock, Compass, AlertCircle, Play } from 'lucide-react';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 
@@ -150,6 +150,13 @@ export const OrbContainer = ({
             <div className="absolute inset-0 flex items-center justify-center z-20">
                 <AlertCircle className="w-16 h-16 text-red-300/80" />
             </div>
+          )}
+
+          {/* Start Prompt Overlay */}
+          {sessionStatus === 'awaiting-boot' && (
+              <div className="absolute inset-0 flex items-center justify-center z-20 animate-pulse">
+                  <Play className="w-16 h-16 text-emerald-200/80 fill-emerald-200/50 ml-2" />
+              </div>
           )}
 
           {/* Animated inner core */}

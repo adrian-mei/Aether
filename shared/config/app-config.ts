@@ -1,3 +1,5 @@
+import { Env } from '@/shared/config/env';
+
 /**
  * Application-wide configuration.
  * Centralizes settings for logging, features, and other global behaviors.
@@ -7,15 +9,15 @@ export const AppConfig = {
   logging: {
     // Master switch: If false, the logger does nothing.
     // Defaults to true unless explicitly disabled.
-    enabled: process.env.NEXT_PUBLIC_ENABLE_LOGGING !== 'false', 
+    enabled: Env.NEXT_PUBLIC_ENABLE_LOGGING,
     
     // Level filter: 'debug' | 'info' | 'warn' | 'error'
     // Defaults to 'info' in production, 'debug' in development
-    level: process.env.NEXT_PUBLIC_LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info'),
+    level: Env.NEXT_PUBLIC_LOG_LEVEL,
     
     // Remote logging switch (sending logs to /api/log)
     // Defaults to false to save bandwidth unless needed
-    enableRemote: process.env.NEXT_PUBLIC_ENABLE_REMOTE_LOGGING === 'true',
+    enableRemote: Env.NEXT_PUBLIC_ENABLE_REMOTE_LOGGING,
   }
 };
 

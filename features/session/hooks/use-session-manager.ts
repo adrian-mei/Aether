@@ -24,18 +24,11 @@ export function useSessionManager() {
       if (granted) {
         setStatus('running');
         const greeting = "Hello, I am Aether. I'm here to listen, validate your feelings, and help you explore your inner world without judgment. How are you feeling right now?";
-        conversation.actions.handleInputComplete(greeting); // Log greeting to history? 
-        // Actually original code did: setCurrentAssistantMessage(greeting); speak(greeting);
-        // useConversation doesn't expose setCurrentAssistantMessage directly as a setter but it sets it on speak.
-        // But we want to add it to history? No, original didn't add greeting to history explicitly, 
-        // but `useVoiceAgent.speak` triggers `setCurrentAssistantMessage` via `useMessageQueue` callback in `useConversation`?
-        // Wait, in original `useSessionManager`:
-        // const { handleChunk ... } = useMessageQueue({ onSpeak: (text) => { setCurrentAssistantMessage(text); speakRef.current(text)... } })
-        // And `handleStartSession` did: `setCurrentAssistantMessage(greeting); speak(greeting);`
         
-        // So I need to do the same.
-        // `conversation` exposes `actions.handleInputComplete` (user input).
-        // I can manually call speak.
+        // Inject greeting as assistant message (don't trigger LLM)
+        conversation.actions.injectAssistantMessage(greeting);
+        
+        // Speak it
         speak(greeting);
       } else {
         setStatus('idle');
@@ -129,24 +122,17 @@ export function useSessionManager() {
             return;
         }
 
-        // Defer state update to avoid synchronous render warning
-        setTimeout(() => {
-            // Check if limit reached (access hook loads from local storage in its own effect, 
-            // but we might be racing here. useSessionAccess initializes interactionCount in effect too.)
-            // We should rely on access.state.isLimitReached, but it might not be set yet.
-            // However, access.state.isLimitReached defaults to false.
-            // We can observe access.state.isLimitReached.
-            
-            // Actually, let's just set 'awaiting-boot' and let the access hook flip it if needed?
-            // Or better, wait for access hook?
-            // The access hook logic runs on mount.
-            
-            // For now:
+        // Wait for access state to be ready
+        if (!access.state.isReady) return;
+
+        if (access.state.isLimitReached) {
+            setStatus('limit-reached');
+        } else {
             setStatus('awaiting-boot');
-        }, 0);
+        }
     }
     initialize();
-  }, []);
+  }, [access.state.isReady, access.state.isLimitReached]);
 
   // React to limit reached from access hook
   useEffect(() => {
@@ -203,6 +189,7 @@ export function useSessionManager() {
       modelCacheStatus: boot.state.modelCacheStatus,
       downloadProgress: boot.state.downloadProgress,
       transcript,
+      turnCount: conversation.state.turnCount,
     },
     actions: {
       startBootSequence: boot.actions.startBootSequence,

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { logger } from '@/shared/lib/logger';
-import { streamChatCompletion, ChatMessage } from '@/features/ai/services/chat-service';
+import { chatService } from '@/features/ai/services/chat-service';
+import type { ChatMessage } from '@/features/ai/types/chat.types';
 import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
 import { memoryService } from '@/features/memory/services/memory-service';
 import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
@@ -8,7 +9,7 @@ import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
 interface UseConversationProps {
   accessCode: string;
   interactionCount: number;
-  onSpeak: (text: string, options?: { autoResume?: boolean }) => Promise<void>;
+  onSpeak: (text: string, options?: { autoResume?: boolean; onStart?: () => void }) => Promise<void>;
   onSessionEnd: () => void;
   isSessionActive: boolean;
 }
@@ -29,8 +30,10 @@ export function useConversation({
   // Message Queue for Streaming
   const { handleChunk, startStream, endStream } = useMessageQueue({
     onSpeak: async (text, options) => {
-      setCurrentAssistantMessage(text);
-      await onSpeak(text, options);
+      await onSpeak(text, {
+        ...options,
+        onStart: () => setCurrentAssistantMessage(text)
+      });
     }
   });
 
@@ -86,14 +89,16 @@ export function useConversation({
       startStream();
 
       logger.debug('SESSION', 'Starting stream completion');
-      const assistantMessageText = await streamChatCompletion(
+      const assistantMessageText = await chatService.streamChatCompletion(
           newHistory, 
-          systemPrompt, 
+          {
+            systemPrompt,
+            accessCode
+          }, 
           (chunk) => {
             lastActivityRef.current = Date.now();
             handleChunk(chunk);
-          },
-          accessCode // Pass ephemeral access code
+          }
       );
       
       endStream();
@@ -155,9 +160,11 @@ export function useConversation({
       isProcessingRef.current = true;
       startStream();
 
-      const assistantMessageText = await streamChatCompletion(
+      const assistantMessageText = await chatService.streamChatCompletion(
           newHistory, 
-          systemPrompt, 
+          {
+            systemPrompt
+          }, 
           handleChunk
       );
       
@@ -183,16 +190,24 @@ export function useConversation({
       lastActivityRef.current = 0;
   }, []);
 
+  const injectAssistantMessage = useCallback((text: string) => {
+    const message: ChatMessage = { role: 'assistant', content: text };
+    historyRef.current = [...historyRef.current, message];
+    setCurrentAssistantMessage(text);
+  }, []);
+
   return {
     state: {
       currentAssistantMessage,
       isProcessing: isProcessingRef.current,
-      lastActivity: lastActivityRef.current
+      lastActivity: lastActivityRef.current,
+      turnCount: Math.floor(historyRef.current.length / 2)
     },
     actions: {
       handleInputComplete,
       handleSilence,
-      resetConversation
+      resetConversation,
+      injectAssistantMessage
     }
   };
 }

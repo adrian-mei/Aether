@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useBootSequence } from './use-boot-sequence';
 import { requestMicrophonePermission } from '@/features/voice/utils/permissions';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
@@ -31,9 +31,14 @@ describe('useBootSequence', () => {
     jest.useRealTimers();
   });
 
-  it('should initialize with default state', () => {
+  it('should initialize with default state', async () => {
     const { result } = renderHook(() => useBootSequence({ onComplete: mockOnComplete }));
     
+    // Wait for initial effects
+    await waitFor(() => {
+        expect(result.current.state.modelCacheStatus).toBe('cached');
+    });
+
     expect(result.current.state.isBooting).toBe(false);
     expect(result.current.state.permissionStatus).toBe('idle');
     expect(result.current.state.downloadProgress).toBeNull();

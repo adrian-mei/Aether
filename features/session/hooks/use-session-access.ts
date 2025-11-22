@@ -3,13 +3,14 @@ import { logger } from '@/shared/lib/logger';
 import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
 
 const MAX_INTERACTIONS = 10;
-const RESET_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
+const RESET_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 export interface SessionAccessState {
   interactionCount: number;
   isUnlocked: boolean;
   accessCode: string;
   isLimitReached: boolean;
+  isReady: boolean;
 }
 
 export interface SessionAccessActions {
@@ -24,6 +25,7 @@ export function useSessionAccess() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [accessCode, setAccessCode] = useState<string>('');
   const [isLimitReached, setIsLimitReached] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   // Load rate limit state with reset logic
   useEffect(() => {
@@ -36,22 +38,22 @@ export function useSessionAccess() {
       
       if (now - timestamp > RESET_WINDOW_MS) {
         // Reset window has passed
-        setTimeout(() => setInteractionCount(0), 0);
+        setInteractionCount(0);
         localStorage.setItem('aether_interaction_count', '0');
-        localStorage.removeItem('aether_limit_timestamp'); // Will be set on next interaction
+        localStorage.removeItem('aether_limit_timestamp'); 
+        setIsReady(true);
         return;
       }
     }
 
     if (storedCount) {
       const count = parseInt(storedCount, 10);
-      setTimeout(() => {
-        setInteractionCount(count);
-        if (count >= MAX_INTERACTIONS) {
-          setIsLimitReached(true);
-        }
-      }, 0);
+      setInteractionCount(count);
+      if (count >= MAX_INTERACTIONS) {
+        setIsLimitReached(true);
+      }
     }
+    setIsReady(true);
   }, []);
 
   const checkLimits = () => {
@@ -107,7 +109,8 @@ export function useSessionAccess() {
       interactionCount,
       isUnlocked,
       accessCode,
-      isLimitReached
+      isLimitReached,
+      isReady
     },
     actions: {
       incrementInteraction,

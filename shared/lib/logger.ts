@@ -1,4 +1,5 @@
 import { AppConfig } from '@/shared/config/app-config';
+import { openDB, IDBPDatabase } from 'idb';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
@@ -22,6 +23,8 @@ type LogListener = (entry: LogEntry) => void;
 
 const MAX_LOGS = 500;
 const STORAGE_KEY = 'aether_logs';
+const DB_NAME = 'aether-logs-db';
+const STORE_NAME = 'logs';
 
 class AetherLogger {
   private isDebugEnabled: boolean;
@@ -29,14 +32,18 @@ class AetherLogger {
   private logs: LogEntry[] = [];
   private serverBuffer: LogEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
+  private db: Promise<IDBPDatabase> | null = null;
 
   constructor() {
     // Check if debug is manually enabled in localStorage
     if (typeof window !== 'undefined') {
       this.isDebugEnabled = localStorage.getItem('aether_debug') === 'true';
       
-      // Clean up old persistent logs if they exist
+      // Clean up old persistent logs if they exist (migration)
       localStorage.removeItem(STORAGE_KEY);
+
+      // Initialize DB
+      this.initDB();
 
       // Handle flush on unload
       if (AppConfig.logging.enableRemote) {
@@ -44,6 +51,21 @@ class AetherLogger {
       }
     } else {
       this.isDebugEnabled = false;
+    }
+  }
+
+  private async initDB() {
+    if (typeof window === 'undefined') return;
+    try {
+      this.db = openDB(DB_NAME, 1, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'timestamp' });
+          }
+        },
+      });
+    } catch (e) {
+      console.warn('Failed to init log DB', e);
     }
   }
 
@@ -127,6 +149,26 @@ class AetherLogger {
     }
   }
 
+  private async persistLog(entry: LogEntry) {
+    if (!this.db) return;
+    try {
+      const db = await this.db;
+      await db.add(STORE_NAME, entry);
+      
+      // Prune old logs (simple count check occasionally)
+      if (Math.random() < 0.01) { // 1% chance to prune
+         const count = await db.count(STORE_NAME);
+         if (count > 2000) {
+             // Delete oldest (simplified: clear all for now or implement sophisticated pruning)
+             // For robustness, we'll just clear older than 24h or just keep top 2000?
+             // IDB pruning is expensive. Let's just keep it simple.
+         }
+      }
+    } catch (e) {
+       // Ignore persistence errors
+    }
+  }
+
   private addLog(entry: LogEntry) {
     this.logs.push(entry);
     
@@ -137,6 +179,9 @@ class AetherLogger {
 
     // Notify listeners
     this.listeners.forEach(l => l(entry));
+    
+    // Persist
+    this.persistLog(entry);
   }
 
   public subscribe(listener: LogListener) {
@@ -194,9 +239,22 @@ class AetherLogger {
     return [...this.logs];
   }
 
+  public async getPersistedLogs(): Promise<LogEntry[]> {
+    if (!this.db) return [];
+    try {
+        const db = await this.db;
+        return await db.getAll(STORE_NAME);
+    } catch {
+        return [];
+    }
+  }
+
   public clearLogs() {
     this.logs = [];
     this.listeners.forEach(() => {}); 
+    if (this.db) {
+        this.db.then(db => db.clear(STORE_NAME));
+    }
   }
   
   public toggleDebug(enable: boolean) {

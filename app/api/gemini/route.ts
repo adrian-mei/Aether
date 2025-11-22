@@ -1,15 +1,18 @@
 import { streamText } from 'ai';
 import { getGoogleProvider, MODEL_NAME } from '@/shared/config/ai-config';
 import { serverRateLimiter } from '@/features/rate-limit/server/rate-limiter';
+import { Env } from '@/shared/config/env';
 
 // Approximate pricing for Gemini Flash (verify current rates)
 const INPUT_COST_PER_MILLION = 0.075;
 const OUTPUT_COST_PER_MILLION = 0.30;
 
 export async function POST(req: Request) {
+  Env.validateServerEnv();
+  
   // 0. Access Code Bypass
   const accessCode = req.headers.get('x-access-code');
-  const isBypassed = accessCode && accessCode === process.env.ACCESS_CODE;
+  const isBypassed = accessCode && accessCode === Env.ACCESS_CODE;
 
   // 1. IP Rate Limiting (if not bypassed)
   const ip = req.headers.get('x-forwarded-for') || 'unknown';
@@ -66,11 +69,21 @@ export async function POST(req: Request) {
         controller.enqueue(encoder.encode(`data: ${logData}\n\n`));
 
       } catch (error: unknown) {
+        // Ignore if the controller is already closed (client disconnected)
+        if (error instanceof TypeError && error.message.includes('Controller is already closed')) {
+            return; 
+        }
+        
         console.error('Streaming error:', error);
-        const errorData = JSON.stringify({ type: 'error', content: 'Stream error' });
-        controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+        
+        try {
+            const errorData = JSON.stringify({ type: 'error', content: 'Stream error' });
+            controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+        } catch (e) {
+            // Ignore errors sending the error message (controller likely closed)
+        }
       } finally {
-        controller.close();
+        try { controller.close(); } catch(e) {}
       }
     }
   });

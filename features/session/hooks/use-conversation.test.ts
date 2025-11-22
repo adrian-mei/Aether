@@ -1,9 +1,13 @@
 import { renderHook, act } from '@testing-library/react';
 import { useConversation } from './use-conversation';
-import { streamChatCompletion } from '@/features/ai/services/chat-service';
+import { chatService } from '@/features/ai/services/chat-service';
 import { memoryService } from '@/features/memory/services/memory-service';
 
-jest.mock('@/features/ai/services/chat-service');
+jest.mock('@/features/ai/services/chat-service', () => ({
+  chatService: {
+    streamChatCompletion: jest.fn(),
+  }
+}));
 jest.mock('@/features/memory/services/memory-service');
 jest.mock('@/shared/lib/logger');
 jest.mock('@/features/session/hooks/use-message-queue', () => ({
@@ -21,7 +25,7 @@ describe('useConversation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (memoryService.queryRelevant as jest.Mock).mockResolvedValue([]);
-    (streamChatCompletion as jest.Mock).mockResolvedValue('Assistant response');
+    (chatService.streamChatCompletion as jest.Mock).mockResolvedValue('Assistant response');
   });
 
   it('should initialize correctly', () => {
@@ -50,7 +54,7 @@ describe('useConversation', () => {
       await result.current.actions.handleInputComplete('Hello');
     });
 
-    expect(streamChatCompletion).toHaveBeenCalled();
+    expect(chatService.streamChatCompletion).toHaveBeenCalled();
     expect(memoryService.extractAndStore).toHaveBeenCalled();
   });
 

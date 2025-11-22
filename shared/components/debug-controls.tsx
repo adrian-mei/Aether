@@ -1,6 +1,6 @@
 import { Bug } from 'lucide-react';
 import DebugOverlay from '@/shared/components/debug-overlay';
-import { testApiConnection } from '@/features/ai/services/chat-service';
+import { chatService } from '@/features/ai/services/chat-service';
 
 interface DebugControlsProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ export function DebugControls({ isOpen, onToggle, onSimulateInput }: DebugContro
       <DebugOverlay 
         isOpen={isOpen} 
         onClose={onToggle} 
-        onTestApi={testApiConnection}
+        onTestApi={() => chatService.testApiConnection()}
         onSimulateInput={onSimulateInput}
       />
 

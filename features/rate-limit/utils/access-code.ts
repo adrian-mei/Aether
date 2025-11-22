@@ -1,11 +1,10 @@
+import { Env } from '@/shared/config/env';
+
 // Default hash - fallback if env var is missing
 const DEFAULT_ACCESS_CODE_HASH = 'fa1baeb8e6f5c28f26997f63cc08bf08ff2632a58a578b8b971dd24d5c7d7863';
 
 export const getAccessCodeHash = () => {
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ACCESS_CODE_HASH) {
-    return process.env.NEXT_PUBLIC_ACCESS_CODE_HASH;
-  }
-  return DEFAULT_ACCESS_CODE_HASH;
+  return Env.NEXT_PUBLIC_ACCESS_CODE_HASH || DEFAULT_ACCESS_CODE_HASH;
 };
 
 /**

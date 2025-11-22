@@ -1,17 +1,13 @@
 import { logger } from '@/shared/lib/logger';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
+import type { ITextToSpeechService, Voice as IVoice, AudioGenerationResult } from '../types/tts.types';
 
-export interface KokoroVoice {
+export interface KokoroVoice extends IVoice {
   id: string;
   name: string;
   language: 'en-US' | 'en-GB';
   gender: 'female' | 'male';
   traits?: string;
-}
-
-export interface AudioGenerationResult {
-  audio: Float32Array;
-  sampleRate: number;
 }
 
 export const KOKORO_VOICES: KokoroVoice[] = [
@@ -33,7 +29,7 @@ export const KOKORO_VOICES: KokoroVoice[] = [
   { id: 'bm_george', name: 'George', language: 'en-GB', gender: 'male', traits: 'Classic' },
 ];
 
-export class KokoroService {
+export class KokoroService implements ITextToSpeechService {
   private static instance: KokoroService;
   private worker: Worker | null = null;
   private modelId = "onnx-community/Kokoro-82M-v1.0-ONNX";

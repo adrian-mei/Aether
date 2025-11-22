@@ -1,4 +1,12 @@
 import { verifyAccessCode } from '@/features/rate-limit/utils/access-code';
+import { Env } from '@/shared/config/env';
+
+// Mock Env
+jest.mock('@/shared/config/env', () => ({
+  Env: {
+    NEXT_PUBLIC_ACCESS_CODE_HASH: undefined,
+  },
+}));
 
 // Mock Crypto API
 const mockDigest = jest.fn();
@@ -13,27 +21,21 @@ Object.defineProperty(global, 'crypto', {
 });
 
 describe('verifyAccessCode', () => {
-  const originalEnv = process.env;
-
   beforeEach(() => {
     jest.resetModules();
     mockDigest.mockReset();
-    process.env = { ...originalEnv };
-  });
-
-  afterAll(() => {
-    process.env = originalEnv;
+    // Reset Env mock
+    (Env as any).NEXT_PUBLIC_ACCESS_CODE_HASH = undefined;
   });
 
   it('should return true for the correct code configured in env', async () => {
     const DUMMY_SECRET = 'dummy-secret';
-    // Use a dummy hash for testing (this matches what we'll tell the mock to produce for the secret)
+    // Use a dummy hash for testing
     const DUMMY_HASH = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
     
-    process.env.NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
+    (Env as any).NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
 
     // Mock digest to return the DUMMY_HASH bytes when called
-    // We convert the hex string back to bytes to simulate what crypto.subtle.digest returns
     const buffer = new Uint8Array(DUMMY_HASH.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
     mockDigest.mockResolvedValue(buffer.buffer);
 
@@ -44,7 +46,7 @@ describe('verifyAccessCode', () => {
 
   it('should return false for an incorrect code', async () => {
     const DUMMY_HASH = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-    process.env.NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
+    (Env as any).NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
 
     // Mock digest to return a DIFFERENT hash (e.g. for 'wrong-code')
     const WRONG_HASH = '0000000000000000000000000000000000000000000000000000000000000000';

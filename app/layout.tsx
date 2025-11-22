@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ServiceWorkerRegister } from "./sw-register";
+import { ErrorBoundary } from "@/shared/components/error-boundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,7 +52,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overscroll-none select-none touch-manipulation`}
       >
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
         <ServiceWorkerRegister />
       </body>
     </html>
