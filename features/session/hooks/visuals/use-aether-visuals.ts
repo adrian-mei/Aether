@@ -93,6 +93,11 @@ export function useAetherVisuals({
     
     // B. Initialization
     if ((downloadProgress !== null && downloadProgress < 100) || sessionStatus === 'booting' || sessionStatus === 'initializing') {
+        // If boot is complete (100%) but we're still pending permission, show that state
+        if (downloadProgress && downloadProgress >= 100 && permissionStatus === 'pending') {
+            return { text: 'Requesting Access', subtext: 'Check your browser prompt' };
+        }
+
         return {
             text: "Initializing...",
             subtext: downloadProgress ? `${Math.round(downloadProgress)}% Complete` : 'Preparing...'

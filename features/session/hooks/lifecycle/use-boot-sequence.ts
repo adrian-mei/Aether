@@ -119,7 +119,13 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
 
               // 5. Auto-Start Session
               try {
-                  const granted = await permissionPromise;
+                  // Race permission against a 10s timeout to prevent infinite hanging
+                  const timeoutPromise = new Promise<boolean>((_, reject) => {
+                      setTimeout(() => reject(new Error('Permission request timed out')), 10000);
+                  });
+
+                  const granted = await Promise.race([permissionPromise, timeoutPromise]);
+                  
                   setPermissionStatus(granted ? 'granted' : 'denied');
                   await onComplete(granted);
               } catch (e) {
