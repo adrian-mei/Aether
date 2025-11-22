@@ -1,4 +1,13 @@
+import { AppConfig } from '@/shared/config/app-config';
+
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+const LOG_LEVELS: Record<LogLevel, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+};
 
 export interface LogEntry {
   timestamp: string;
@@ -15,7 +24,6 @@ const MAX_LOGS = 500;
 const STORAGE_KEY = 'aether_logs';
 
 class AetherLogger {
-  private isDev: boolean;
   private isDebugEnabled: boolean;
   private listeners: LogListener[] = [];
   private logs: LogEntry[] = [];
@@ -23,46 +31,55 @@ class AetherLogger {
   private flushTimer: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.isDev = process.env.NODE_ENV === 'development';
     // Check if debug is manually enabled in localStorage
     if (typeof window !== 'undefined') {
       this.isDebugEnabled = localStorage.getItem('aether_debug') === 'true';
+      
       // Clean up old persistent logs if they exist
       localStorage.removeItem(STORAGE_KEY);
 
       // Handle flush on unload
-      window.addEventListener('beforeunload', () => this.flushToServer(true));
+      if (AppConfig.logging.enableRemote) {
+        window.addEventListener('beforeunload', () => this.flushToServer(true));
+      }
     } else {
       this.isDebugEnabled = false;
     }
   }
 
+  private shouldLog(level: LogLevel): boolean {
+    if (!AppConfig.logging.enabled) return false;
+    
+    // If debug mode is toggled on via UI/localStorage, always log
+    if (this.isDebugEnabled) return true;
+
+    const configLevelValue = LOG_LEVELS[AppConfig.logging.level as LogLevel] || LOG_LEVELS.info;
+    const messageLevelValue = LOG_LEVELS[level];
+
+    return messageLevelValue <= configLevelValue;
+  }
+
   private flushToServer(isUnload = false) {
+    if (!AppConfig.logging.enableRemote) return;
     if (this.serverBuffer.length === 0) return;
 
     const logsToSend = [...this.serverBuffer];
     this.serverBuffer = [];
 
     try {
+      // Use Blob for sendBeacon compatibility
       const blob = new Blob([JSON.stringify({ logs: logsToSend })], { type: 'application/json' });
       
       if (isUnload && navigator.sendBeacon) {
         navigator.sendBeacon('/api/log', blob);
       } else {
-        // Use fetch for normal flushing
-        // We don't use JSON.stringify here again because we can construct from the object directly
-        // or just use the body string. But typically fetch body takes string or blob.
-        // To avoid double stringify if we used Blob above, let's reuse it if possible, 
-        // but fetch body with Content-Type json expects string.
-        
         fetch('/api/log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ logs: logsToSend }),
           keepalive: true 
         }).catch(() => {
-           // Silently fail or warn to avoid console noise/recursion
-           // console.warn('Log sync skipped'); 
+           // Silently fail
         });
       }
     } catch (e) {
@@ -71,7 +88,8 @@ class AetherLogger {
   }
 
   private queueForServer(entry: LogEntry) {
-    if (typeof window === 'undefined') return; // Client side only sync
+    if (!AppConfig.logging.enableRemote) return;
+    if (typeof window === 'undefined') return; 
     
     this.serverBuffer.push(entry);
 
@@ -133,8 +151,8 @@ class AetherLogger {
   }
 
   public log(level: LogLevel, category: string, message: string, data?: unknown, stack?: string) {
-    // Only log if Dev or Debug is enabled
-    if (!this.isDev && !this.isDebugEnabled && level !== 'error') return;
+    // Master switch and level check
+    if (!this.shouldLog(level)) return;
 
     const safeData = this.sanitize(data);
 
@@ -147,7 +165,7 @@ class AetherLogger {
       stack,
     };
 
-    // Console Output (use original data for browser console as it handles objs well)
+    // Console Output
     const formatted = this.format(entry);
     const consoleArgs: unknown[] = [formatted];
     if (data) consoleArgs.push(data);
@@ -160,10 +178,10 @@ class AetherLogger {
       case 'debug': console.debug(...consoleArgs); break;
     }
 
-    // In-memory storage
+    // In-memory storage (always store if it passed the filter)
     this.addLog(entry);
 
-    // Sync to server for tracing
+    // Sync to server
     this.queueForServer(entry);
   }
 
@@ -178,10 +196,7 @@ class AetherLogger {
 
   public clearLogs() {
     this.logs = [];
-    this.listeners.forEach(() => {}); // Trigger update? 
-    // Actually, DebugOverlay subscribes to *new* entries. 
-    // It clears its own local state when clearLogs is called.
-    // But other components calling getLogs() should see empty.
+    this.listeners.forEach(() => {}); 
   }
   
   public toggleDebug(enable: boolean) {

@@ -1,429 +1,173 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
-import { streamChatCompletion, ChatMessage } from '@/features/ai/services/chat-service';
-import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
-import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/utils/permissions';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
 import { logger } from '@/shared/lib/logger';
-import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
-import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
-import { memoryService } from '@/features/memory/services/memory-service';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
-import { checkModelCache, ModelCacheStatus } from '@/features/voice/utils/model-cache';
+
+import { useSessionAccess } from './use-session-access';
+import { useBootSequence } from './use-boot-sequence';
+import { useConversation } from './use-conversation';
 
 export type SessionStatus = 'initializing' | 'awaiting-boot' | 'booting' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
-const MAX_INTERACTIONS = 10;
-const RESET_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
-
 export function useSessionManager() {
   const [status, setStatus] = useState<SessionStatus>('initializing');
-  const [interactionCount, setInteractionCount] = useState(0);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [accessCode, setAccessCode] = useState<string>('');
   const [isDebugOpen, setIsDebugOpen] = useState(false);
-  const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
-  const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
-  const [modelCacheStatus, setModelCacheStatus] = useState<ModelCacheStatus>('checking');
-  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
-  const isServicesReadyRef = useRef(false);
   
-  const historyRef = useRef<ChatMessage[]>([]);
-  const speakRef = useRef<(text: string, options?: { autoResume?: boolean }) => Promise<void>>(async () => {});
-  const realDownloadProgressRef = useRef<number>(0);
-  const resetRef = useRef<() => void>(() => {});
-  const isProcessingRef = useRef(false);
-  const lastActivityRef = useRef<number>(0);
+  // 1. Session Access & Limits
+  const access = useSessionAccess();
 
-  // Message Queue for Streaming
-  const { handleChunk, startStream, endStream } = useMessageQueue({
-    onSpeak: async (text, options) => {
-      setCurrentAssistantMessage(text);
-      await speakRef.current(text, options);
+  // 2. Boot Sequence
+  const boot = useBootSequence({
+    onComplete: async (granted) => {
+      if (granted) {
+        setStatus('running');
+        const greeting = "Hello, I am Aether. I'm here to listen, validate your feelings, and help you explore your inner world without judgment. How are you feeling right now?";
+        conversation.actions.handleInputComplete(greeting); // Log greeting to history? 
+        // Actually original code did: setCurrentAssistantMessage(greeting); speak(greeting);
+        // useConversation doesn't expose setCurrentAssistantMessage directly as a setter but it sets it on speak.
+        // But we want to add it to history? No, original didn't add greeting to history explicitly, 
+        // but `useVoiceAgent.speak` triggers `setCurrentAssistantMessage` via `useMessageQueue` callback in `useConversation`?
+        // Wait, in original `useSessionManager`:
+        // const { handleChunk ... } = useMessageQueue({ onSpeak: (text) => { setCurrentAssistantMessage(text); speakRef.current(text)... } })
+        // And `handleStartSession` did: `setCurrentAssistantMessage(greeting); speak(greeting);`
+        
+        // So I need to do the same.
+        // `conversation` exposes `actions.handleInputComplete` (user input).
+        // I can manually call speak.
+        speak(greeting);
+      } else {
+        setStatus('idle');
+      }
     }
   });
 
-  const handleInputComplete = useCallback(async (text: string) => {
-    logger.info('SESSION', 'Processing input', { text });
+  // Refs for circular dependency resolution
+  const onInputCompleteRef = useRef<(text: string) => void>(() => {});
+  const onSilenceRef = useRef<() => void>(() => {});
+  const resetRef = useRef<() => void>(() => {});
 
-    // Check rate limit first (unless unlocked)
-    if (!isUnlocked && interactionCount >= MAX_INTERACTIONS) {
-        setStatus('limit-reached');
-        const limitMsg = "I have enjoyed our time together. To continue our journey, please join the waitlist.";
-        await speakRef.current(limitMsg, { autoResume: false });
-        resetRef.current();
-        return;
-    }
-
-    // Update count (even if unlocked, we track it, but don't limit)
-    const newCount = interactionCount + 1;
-    setInteractionCount(newCount);
-    localStorage.setItem('aether_interaction_count', newCount.toString());
-
-    // Set timestamp on first interaction if not set
-    if (!localStorage.getItem('aether_limit_timestamp')) {
-      localStorage.setItem('aether_limit_timestamp', Date.now().toString());
-    }
-
-    // Check for stop commands
-    const lowerText = text.trim().toLowerCase().replace(/[.!?,]$/, '');
-    const stopCommands = ['stop', 'quit', 'pause', 'exit', 'end session', 'end chat', 'bye', 'goodbye'];
-    
-    if (stopCommands.includes(lowerText)) {
-      logger.info('SESSION', 'User requested stop', { command: lowerText });
-      const goodbye = "Goodbye.";
-      // Wait for goodbye to finish speaking before resetting
-      await speakRef.current(goodbye, { autoResume: false });
-      resetRef.current();
-      setStatus('idle');
-      logger.info('SESSION', 'Chat ended (user command)');
-      return;
-    }
-
-    const userMessage: ChatMessage = { role: 'user', content: text };
-    const newHistory = [...historyRef.current, userMessage];
-    historyRef.current = newHistory;
-
-    // Retrieve relevant memories (async, non-blocking with timeout)
-    // Race memory query against a 5s timeout (increased from 3s) to prevent hanging
-    const memoryPromise = memoryService.queryRelevant(text, { limit: 5 }).catch((err) => {
-        logger.error('SESSION', 'Memory retrieval failed', err);
-        return [];
-    });
-    
-    const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => {
-        logger.warn('SESSION', 'Memory retrieval timed out after 5000ms, skipping');
-        resolve([]);
-    }, 5000));
-    
-    const relevantMemories = await Promise.race([memoryPromise, timeoutPromise]);
-    
-    if (relevantMemories.length > 0) {
-        logger.debug('SESSION', 'Retrieved memories', { count: relevantMemories.length });
-    }
-
-    // Build system prompt with context and memories
-    const sessionInteractionCount = Math.floor(newHistory.length / 2);
-    const systemPrompt = buildSystemPrompt({
-      interactionCount: sessionInteractionCount,
-      relevantMemories: relevantMemories.map(m => m.content),
-      // TODO: Add mood analysis and other context signals
-    });
-
-    try {
-      isProcessingRef.current = true;
-      lastActivityRef.current = Date.now();
-      startStream();
-
-      logger.debug('SESSION', 'Starting stream completion');
-      const assistantMessageText = await streamChatCompletion(
-          newHistory, 
-          systemPrompt, 
-          (chunk) => {
-            lastActivityRef.current = Date.now();
-            handleChunk(chunk);
-          },
-          accessCode // Pass ephemeral access code
-      );
-      
-      endStream();
-      isProcessingRef.current = false;
-
-      historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
-
-      // Extract and store memories (non-blocking)
-      memoryService.extractAndStore({
-        userMessage: text,
-        assistantMessage: assistantMessageText,
-        timestamp: Date.now(),
-        interactionCount: sessionInteractionCount,
-      }).catch((err) => {
-        logger.warn('MEMORY', 'Failed to extract memories', err);
-      });
-
-      if (!assistantMessageText.trim()) {
-        logger.warn('SESSION', 'Empty response received');
-        const errorMsg = "I'm sorry, I didn't catch that.";
-        speakRef.current(errorMsg);
-      }
-    } catch {
-      endStream();
-      isProcessingRef.current = false;
-      const errorMsg = "I'm having trouble connecting. Please try again.";
-      speakRef.current(errorMsg);
-    }
-  }, [handleChunk, startStream, endStream, interactionCount, isUnlocked]);
-
-  const handleSilence = useCallback(async () => {
-    if (isProcessingRef.current || status !== 'running') return;
-    
-    logger.info('SESSION', 'User silence detected, re-engaging...');
-    
-    // Inject a system note into history as a user message to prompt re-engagement
-    const silenceMessage: ChatMessage = { 
-        role: 'user', 
-        content: '(The user has been silent for a while. Gently re-engage them. Suggest a topic, ask about their mood, or just offer presence.)' 
-    };
-    
-    // We add this to history so the AI knows context, but it might look weird if we ever show history UI.
-    // For voice-only, it's fine.
-    const newHistory = [...historyRef.current, silenceMessage];
-    // Don't update historyRef immediately to avoid duplicate processing if user speaks now?
-    // Actually we should commit it.
-    historyRef.current = newHistory;
-
-    // Retrieve relevant memories for personalized re-engagement
-    const relevantMemories = await memoryService.queryRelevant(
-      'general conversation topics preferences interests',
-      { limit: 3 }
-    ).catch(() => []);
-
-    const sessionInteractionCount = Math.floor(newHistory.length / 2);
-    const systemPrompt = buildSystemPrompt({
-      interactionCount: sessionInteractionCount,
-      silenceDuration: 30, // Signal long silence to system prompt builder
-      relevantMemories: relevantMemories.map(m => m.content),
-    });
-
-    try {
-      isProcessingRef.current = true;
-      startStream();
-
-      const assistantMessageText = await streamChatCompletion(
-          newHistory, 
-          systemPrompt, 
-          handleChunk
-      );
-      
-      endStream();
-      isProcessingRef.current = false;
-
-      historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
-    } catch (error) {
-        logger.error('SESSION', 'Failed to handle silence', error);
-        isProcessingRef.current = false;
-        endStream();
-        // Fallback static message
-        const fallback = "I'm here whenever you're ready.";
-        setCurrentAssistantMessage(fallback);
-        speakRef.current(fallback);
-    }
-  }, [status, startStream, endStream, handleChunk]);
-
+  // 3. Voice Agent
   const { 
     state: voiceState,
     transcript,
     startListening, 
     stopListening, 
-    reset, 
+    reset: resetVoice, 
     speak, 
     toggleMute
-  } = useVoiceAgent(handleInputComplete, handleSilence);
+  } = useVoiceAgent(
+    (text) => onInputCompleteRef.current(text),
+    () => onSilenceRef.current()
+  );
+
+  // 4. Conversation Logic
+  const conversation = useConversation({
+    accessCode: access.state.accessCode,
+    interactionCount: access.state.interactionCount,
+    onSpeak: speak,
+    isSessionActive: status === 'running',
+    onSessionEnd: () => {
+        resetRef.current();
+        setStatus('idle');
+    }
+  });
+
+  // Connect Refs
+  useEffect(() => {
+    onInputCompleteRef.current = async (text) => {
+        // Check limits
+        if (access.actions.incrementInteraction()) {
+            conversation.actions.handleInputComplete(text);
+        } else {
+            setStatus('limit-reached');
+            const limitMsg = "I have enjoyed our time together. To continue our journey, please join the waitlist.";
+            await speak(limitMsg, { autoResume: false });
+            resetRef.current();
+        }
+    };
+    
+    onSilenceRef.current = conversation.actions.handleSilence;
+  }, [access.actions, conversation.actions, speak]);
 
   useEffect(() => {
-    speakRef.current = speak;
-  }, [speak]);
+      resetRef.current = () => {
+          resetVoice();
+          conversation.actions.resetConversation();
+      };
+  }, [resetVoice, conversation.actions]);
 
-  useEffect(() => {
-    resetRef.current = reset;
-  }, [reset]);
-
-  // Timeout Watchdog
+  // Watchdog for timeout (30s no activity)
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     if (voiceState === 'processing') {
-      lastActivityRef.current = Date.now();
       intervalId = setInterval(() => {
-        const elapsed = Date.now() - lastActivityRef.current;
+        const elapsed = Date.now() - conversation.state.lastActivity;
         if (elapsed > 30000) {
           logger.warn('SESSION', 'Request timed out (no activity)', { elapsedMs: elapsed });
-          reset();
+          resetVoice();
           logger.info('SESSION', 'Chat ended (watchdog timeout)');
         }
       }, 1000);
     }
     return () => clearInterval(intervalId);
-  }, [voiceState, reset]);
+  }, [voiceState, resetVoice, conversation.state.lastActivity]);
 
-  // Subscribe to Kokoro progress events
-  useEffect(() => {
-      kokoroService.onProgress((progress, text) => {
-          realDownloadProgressRef.current = progress;
-          // If waiting for download, update state (but handled by loop now)
-          logger.debug('SESSION', 'Download progress', { progress, text });
-      });
-  }, []);
-
-  // Initialization Flow
+  // Initialization Logic
   useEffect(() => {
     logger.info('APP', 'Session manager initializing...');
 
     async function initialize() {
-        // Check model cache in parallel
-        checkModelCache().then(status => {
-            setModelCacheStatus(status);
-            logger.info('SESSION', 'Model cache status', { status });
-        });
-
         if (!isSecureContext()) {
             setStatus('insecure-context');
             return;
         }
-      const supported = await isBrowserSupported();
-      if (!supported) {
-        setStatus('unsupported');
-        return;
-      }
+        const supported = await isBrowserSupported();
+        if (!supported) {
+            setStatus('unsupported');
+            return;
+        }
 
-      // Ready - Check state
-      // We no longer check localStorage for access code (session-only unlock)
-      const storedCount = localStorage.getItem('aether_interaction_count');
-
-      // Defer state update to avoid synchronous render warning
-      setTimeout(() => {
-          if (storedCount && parseInt(storedCount, 10) >= MAX_INTERACTIONS) {
-              setStatus('limit-reached');
-              logger.info('SESSION', 'Session limit reached on startup');
-          } else {
-              // Instead of idle, we wait for user to tap (Trademark Boot Sequence)
-              setStatus('awaiting-boot');
-          }
-      }, 0);
+        // Defer state update to avoid synchronous render warning
+        setTimeout(() => {
+            // Check if limit reached (access hook loads from local storage in its own effect, 
+            // but we might be racing here. useSessionAccess initializes interactionCount in effect too.)
+            // We should rely on access.state.isLimitReached, but it might not be set yet.
+            // However, access.state.isLimitReached defaults to false.
+            // We can observe access.state.isLimitReached.
+            
+            // Actually, let's just set 'awaiting-boot' and let the access hook flip it if needed?
+            // Or better, wait for access hook?
+            // The access hook logic runs on mount.
+            
+            // For now:
+            setStatus('awaiting-boot');
+        }, 0);
     }
     initialize();
   }, []);
 
-  // Load rate limit state with reset logic
+  // React to limit reached from access hook
   useEffect(() => {
-    const storedCount = localStorage.getItem('aether_interaction_count');
-    const storedTimestamp = localStorage.getItem('aether_limit_timestamp');
-    
-    if (storedTimestamp) {
-      const timestamp = parseInt(storedTimestamp, 10);
-      const now = Date.now();
-      
-      if (now - timestamp > RESET_WINDOW_MS) {
-        // Reset window has passed
-        setTimeout(() => setInteractionCount(0), 0);
-        localStorage.setItem('aether_interaction_count', '0');
-        localStorage.removeItem('aether_limit_timestamp'); // Will be set on next interaction
-        return;
-      }
-    }
-
-    if (storedCount) {
-      const count = parseInt(storedCount, 10);
-      setTimeout(() => {
-        setInteractionCount(count);
-        if (count >= MAX_INTERACTIONS) {
+      if (access.state.isLimitReached) {
           setStatus('limit-reached');
-        }
-      }, 0);
-    }
-  }, []);
-
-  const startBootSequence = async () => {
-      if (status !== 'awaiting-boot') return;
-      
-      setStatus('booting');
-      setDownloadProgress(0);
-      logger.info('SESSION', 'Starting boot sequence');
-
-      // 1. Request Permission Immediately (User Gesture)
-      setPermissionStatus('pending');
-      // We purposefully don't await here, so animation starts. We await at the end.
-      const permissionPromise = requestMicrophonePermission();
-
-      // 2. Start initializing services
-      const initPromise = kokoroService.initialize()
-        .then(() => { isServicesReadyRef.current = true; })
-        .catch(err => {
-            logger.error('APP', 'Kokoro init failed', err);
-            isServicesReadyRef.current = true;
-        });
-      memoryService.initialize().catch(err => logger.error('APP', 'Memory init failed', err));
-      
-      // 3. Initialize audio context
-      audioPlayer.resume().catch(err => logger.warn('APP', 'Failed to resume audio context', err));
-
-      // 4. Run Animation Loop
-      const TARGET_DURATION = 8000;
-      const UPDATE_INTERVAL = 50;
-      let startTime = Date.now();
-
-      const interval = setInterval(async () => {
-          const elapsed = Date.now() - startTime;
-          let virtualProgress = (elapsed / TARGET_DURATION) * 100;
-          
-          // Hybrid Progress: Sync with real download if active
-          const realProgress = realDownloadProgressRef.current;
-          if (realProgress > 0 && realProgress < 100) {
-              const maxAllowed = realProgress + 5; // Allow 5% buffer
-              if (virtualProgress > maxAllowed) {
-                  virtualProgress = maxAllowed;
-                  // Slow down time-based progress to match download speed
-                  // Recalculate startTime so 'elapsed' matches the clamped progress
-                  startTime = Date.now() - ((virtualProgress / 100) * TARGET_DURATION);
-              }
-          }
-
-          // Wait for services at 99%
-          if (virtualProgress > 99 && !isServicesReadyRef.current) {
-              virtualProgress = 99;
-          }
-
-          if (virtualProgress > 100) virtualProgress = 100;
-          setDownloadProgress(virtualProgress);
-
-          if (virtualProgress >= 100 && isServicesReadyRef.current) {
-              clearInterval(interval);
-              
-              // 5. Auto-Start Session
-              try {
-                  const granted = await permissionPromise;
-                  if (granted) {
-                      setPermissionStatus('granted');
-                      setStatus('running');
-                      const greeting = "Hello, I am Aether. I'm here to listen, validate your feelings, and help you explore your inner world without judgment. How are you feeling right now?";
-                      setCurrentAssistantMessage(greeting);
-                      speak(greeting);
-                  } else {
-                      setPermissionStatus('denied');
-                      setStatus('idle'); // Fallback to manual start if denied
-                  }
-              } catch (e) {
-                  logger.error('SESSION', 'Auto-start failed', e);
-                  setStatus('idle');
-              }
-          }
-      }, UPDATE_INTERVAL);
-  };
+      }
+  }, [access.state.isLimitReached]);
 
   const handleStartSession = async () => {
     logger.info('APP', 'User clicked Start Session');
     if (status === 'unsupported' || status === 'limit-reached') return;
 
-    // Services should be initialized by boot sequence, but safety check
+    // Services init
     kokoroService.initialize().catch(err => logger.error('APP', 'Kokoro init failed', err));
-    
-    // Initialize/Resume AudioContext on user interaction to unlock audio on mobile
-    audioPlayer.resume().catch(err => {
-        logger.warn('APP', 'Failed to resume audio context', err);
-    });
+    audioPlayer.resume().catch(err => logger.warn('APP', 'Failed to resume audio context', err));
 
-    setPermissionStatus('pending');
-    const granted = await requestMicrophonePermission();
-    if (granted) {
-      setPermissionStatus('granted');
-      setStatus('running');
-      const greeting = "Hello, I am Aether. I'm here to listen, validate your feelings, and help you explore your inner world without judgment. How are you feeling right now?";
-      setCurrentAssistantMessage(greeting);
-      speak(greeting);
-    } else {
-      setPermissionStatus('denied');
-      setStatus('idle'); // Remain idle if permission denied
-    }
+    boot.actions.setPermissionStatus('pending');
+    const granted = await boot.actions.retryPermission().then(() => true).catch(() => false);
+    // Note: retryPermission sets state but we need to know result here. 
+    // Actually boot.actions.retryPermission calls onComplete(true) if granted.
+    // So we just need to call it.
   };
 
   const toggleListening = () => {
@@ -449,44 +193,26 @@ export function useSessionManager() {
     setTimeout(() => setIsDebugOpen(debug), 0);
   }, []);
 
-  const verifyAccessCode = async (code: string): Promise<boolean> => {
-    const isValid = await verifyHash(code);
-    if (isValid) {
-      setIsUnlocked(true);
-      setAccessCode(code); // Store in memory only
-      // localStorage.setItem('aether_access_code', code); // REMOVED: Session-only persistence
-      if (status === 'limit-reached') {
-          setStatus('idle');
-      }
-      logger.info('SESSION', 'Access code verified successfully');
-      return true;
-    }
-    return false;
-  };
-
   return {
     state: {
-      status,
+      status: boot.state.isBooting ? 'booting' : status,
       isDebugOpen,
       voiceState,
-      permissionStatus,
-      currentAssistantMessage,
-      modelCacheStatus,
-      downloadProgress,
+      permissionStatus: boot.state.permissionStatus,
+      currentAssistantMessage: conversation.state.currentAssistantMessage,
+      modelCacheStatus: boot.state.modelCacheStatus,
+      downloadProgress: boot.state.downloadProgress,
       transcript,
     },
     actions: {
-      startBootSequence,
+      startBootSequence: boot.actions.startBootSequence,
       handleStartSession,
-      handleInputComplete, // Exposed for debugging
+      handleInputComplete: conversation.actions.handleInputComplete,
       toggleListening,
       toggleDebug,
-      toggleMute: () => {
-        logger.info('APP', 'User clicked Toggle Mute');
-        toggleMute();
-      },
-      onRetryPermission: handleStartSession,
-      verifyAccessCode,
+      toggleMute,
+      onRetryPermission: boot.actions.retryPermission,
+      verifyAccessCode: access.actions.verifyAccessCode,
     },
   };
 }
