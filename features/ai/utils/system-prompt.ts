@@ -7,6 +7,7 @@ interface ContextParams {
   interactionCount: number;
   lastTopicShift?: boolean;
   silenceDuration?: number;
+  relevantMemories?: string[];
 }
 
 // ============================================================================
@@ -128,7 +129,12 @@ function buildContextNote(topicShift?: boolean, silence?: number): string {
 // ============================================================================
 
 export function buildSystemPrompt(context: ContextParams): string {
-  return `${STATIC_SYSTEM_PROMPT}
+  // Build memory context section if memories are available
+  const memoryContext = context.relevantMemories && context.relevantMemories.length > 0
+    ? `\n\n## PAST CONTEXT\nRelevant memories from previous conversations:\n${context.relevantMemories.map(m => `- ${m}`).join('\n')}\n\nUse these memories naturally to personalize your responses and show you remember them. Don't explicitly reference "memories" or "I remember" unless it flows naturally.`
+    : '';
+
+  return `${STATIC_SYSTEM_PROMPT}${memoryContext}
 
 ${buildDynamicPrompt(context)}`;
 }

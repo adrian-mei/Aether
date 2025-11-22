@@ -109,6 +109,7 @@ export class KokoroService {
   }
 
   private handleWorkerMessage(event: MessageEvent) {
+    if (!event.data) return;
     const { type, voices, audio, sampleRate, error } = event.data;
 
     if (type === 'ready') {

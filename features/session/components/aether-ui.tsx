@@ -232,6 +232,7 @@ export const AetherUI = ({
   };
 
   const getBackgroundOrbStyle = (orb: Orb) => {
+    if (!orb?.config) return 'from-emerald-600/20 to-emerald-700/10';
     const colors: Record<string, string> = {
       emerald: 'from-emerald-600/20 to-emerald-700/10',
       green: 'from-green-600/20 to-green-700/10',

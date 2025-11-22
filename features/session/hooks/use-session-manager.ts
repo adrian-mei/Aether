@@ -7,6 +7,7 @@ import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/brow
 import { logger } from '@/shared/lib/logger';
 import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
 import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
+import { memoryService } from '@/features/memory/services/memory-service';
 
 export type SessionStatus = 'initializing' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
@@ -72,10 +73,14 @@ export function useSessionManager() {
     const newHistory = [...historyRef.current, userMessage];
     historyRef.current = newHistory;
 
-    // Build system prompt with context
+    // Retrieve relevant memories (async, non-blocking)
+    const relevantMemories = await memoryService.queryRelevant(text, { limit: 5 }).catch(() => []);
+
+    // Build system prompt with context and memories
     const sessionInteractionCount = Math.floor(newHistory.length / 2);
     const systemPrompt = buildSystemPrompt({
       interactionCount: sessionInteractionCount,
+      relevantMemories: relevantMemories.map(m => m.content),
       // TODO: Add mood analysis and other context signals
     });
 
@@ -93,7 +98,17 @@ export function useSessionManager() {
       isProcessingRef.current = false;
 
       historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
-      
+
+      // Extract and store memories (non-blocking)
+      memoryService.extractAndStore({
+        userMessage: text,
+        assistantMessage: assistantMessageText,
+        timestamp: Date.now(),
+        interactionCount: sessionInteractionCount,
+      }).catch((err) => {
+        logger.warn('MEMORY', 'Failed to extract memories', err);
+      });
+
       if (!assistantMessageText.trim()) {
         logger.warn('SESSION', 'Empty response received');
         const errorMsg = "I'm sorry, I didn't catch that.";
@@ -125,10 +140,17 @@ export function useSessionManager() {
     // Actually we should commit it.
     historyRef.current = newHistory;
 
+    // Retrieve relevant memories for personalized re-engagement
+    const relevantMemories = await memoryService.queryRelevant(
+      'general conversation topics preferences interests',
+      { limit: 3 }
+    ).catch(() => []);
+
     const sessionInteractionCount = Math.floor(newHistory.length / 2);
     const systemPrompt = buildSystemPrompt({
       interactionCount: sessionInteractionCount,
-      silenceDuration: 30 // Signal long silence to system prompt builder
+      silenceDuration: 30, // Signal long silence to system prompt builder
+      relevantMemories: relevantMemories.map(m => m.content),
     });
 
     try {
@@ -199,7 +221,12 @@ export function useSessionManager() {
         setStatus('unsupported');
         return;
       }
-      
+
+      // Initialize memory service in background (non-blocking)
+      memoryService.initialize().catch((err) => {
+        logger.warn('MEMORY', 'Memory service initialization failed, continuing without memories', err);
+      });
+
       // Ready - Check state
       const accessCode = localStorage.getItem('aether_access_code');
       const unlocked = !!accessCode;
