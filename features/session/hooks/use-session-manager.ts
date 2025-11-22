@@ -212,7 +212,8 @@ export function useSessionManager() {
   }, [status, startStream, endStream, handleChunk]);
 
   const { 
-    state: voiceState, 
+    state: voiceState,
+    transcript,
     startListening, 
     stopListening, 
     reset, 
@@ -349,12 +350,24 @@ export function useSessionManager() {
       // 4. Run Animation Loop
       const TARGET_DURATION = 8000;
       const UPDATE_INTERVAL = 50;
-      const startTime = Date.now();
+      let startTime = Date.now();
 
       const interval = setInterval(async () => {
           const elapsed = Date.now() - startTime;
           let virtualProgress = (elapsed / TARGET_DURATION) * 100;
           
+          // Hybrid Progress: Sync with real download if active
+          const realProgress = realDownloadProgressRef.current;
+          if (realProgress > 0 && realProgress < 100) {
+              const maxAllowed = realProgress + 5; // Allow 5% buffer
+              if (virtualProgress > maxAllowed) {
+                  virtualProgress = maxAllowed;
+                  // Slow down time-based progress to match download speed
+                  // Recalculate startTime so 'elapsed' matches the clamped progress
+                  startTime = Date.now() - ((virtualProgress / 100) * TARGET_DURATION);
+              }
+          }
+
           // Wait for services at 99%
           if (virtualProgress > 99 && !isServicesReadyRef.current) {
               virtualProgress = 99;
@@ -460,6 +473,7 @@ export function useSessionManager() {
       currentAssistantMessage,
       modelCacheStatus,
       downloadProgress,
+      transcript,
     },
     actions: {
       startBootSequence,

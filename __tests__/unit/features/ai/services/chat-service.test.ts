@@ -60,12 +60,12 @@ describe('ChatService', () => {
   });
 
   it('should include access code in headers', async () => {
-    localStorage.setItem('aether_access_code', 'secret-123');
     const history: ChatMessage[] = [{ role: 'user', content: 'Hi' }];
+    const accessCode = 'secret-123';
     
     mockFetch.mockResolvedValue(createMockStreamResponse([]));
 
-    await streamChatCompletion(history);
+    await streamChatCompletion(history, undefined, undefined, accessCode);
 
     expect(mockFetch).toHaveBeenCalledWith('/api/gemini', expect.objectContaining({
       headers: expect.objectContaining({

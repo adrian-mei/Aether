@@ -59,9 +59,9 @@ describe('useSessionManager', () => {
 
     expect(result.current.state.status).toBe('initializing');
     
-    // Should transition to idle once initialization is done
+    // Should transition to awaiting-boot once initialization is done
     await waitFor(() => {
-      expect(result.current.state.status).toBe('idle');
+      expect(result.current.state.status).toBe('awaiting-boot');
     });
   });
 
@@ -80,8 +80,8 @@ describe('useSessionManager', () => {
     
     const { result } = renderHook(() => useSessionManager());
 
-    // Wait for idle
-    await waitFor(() => expect(result.current.state.status).toBe('idle'));
+    // Wait for initialization
+    await waitFor(() => expect(result.current.state.status).toBe('awaiting-boot'));
 
     await act(async () => {
       await result.current.actions.handleStartSession();
@@ -97,7 +97,7 @@ describe('useSessionManager', () => {
     
     const { result } = renderHook(() => useSessionManager());
 
-    await waitFor(() => expect(result.current.state.status).toBe('idle'));
+    await waitFor(() => expect(result.current.state.status).toBe('awaiting-boot'));
 
     await act(async () => {
       await result.current.actions.handleStartSession();

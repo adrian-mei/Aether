@@ -47,6 +47,7 @@ export function useVoiceAgent(
   onSilence?: () => void
 ) {
   const [state, setState] = useState<VoiceAgentState>('idle');
+  const [transcript, setTranscript] = useState<string>('');
   const stateRef = useRef<VoiceAgentState>(state);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
@@ -97,6 +98,7 @@ export function useVoiceAgent(
         logger.info('VOICE', 'SpeechRecognition started');
         setState('listening');
         transcriptRef.current = '';
+        setTranscript('');
 
         // Start watchdog
         if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
@@ -121,6 +123,7 @@ export function useVoiceAgent(
           .join('');
         
         transcriptRef.current = currentTranscript;
+        setTranscript(currentTranscript);
         logger.debug('VOICE', 'Partial speech result', { transcript: currentTranscript });
 
         // Set new timer
@@ -366,6 +369,7 @@ export function useVoiceAgent(
 
   return {
     state,
+    transcript,
     startListening,
     stopListening,
     reset,

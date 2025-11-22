@@ -65,11 +65,11 @@ describe('useVoiceAgent', () => {
     delete (global.window as any).SpeechSynthesisUtterance;
   });
 
-  it('should initialize with idle state and load kokoro', () => {
+  it('should initialize with idle state', () => {
     const { result } = renderHook(() => useVoiceAgent(jest.fn()));
     
     expect(result.current.state).toBe('idle');
-    expect(kokoroService.initialize).toHaveBeenCalled();
+    // Kokoro initialization is now handled by useSessionManager
   });
 
   it('should start listening when requested', () => {
