@@ -25,6 +25,7 @@ interface AetherUIProps {
   modelCacheStatus: ModelCacheStatus;
   downloadProgress: number | null;
   currentAssistantMessage?: string;
+  currentMessageDuration?: number;
   transcript?: string;
   turnCount: number;
   onStartSession: () => void;
@@ -39,6 +40,7 @@ export const AetherUI = ({
   modelCacheStatus,
   downloadProgress,
   currentAssistantMessage,
+  currentMessageDuration,
   transcript,
   turnCount,
   onStartSession, 
@@ -131,6 +133,7 @@ export const AetherUI = ({
                 modelCacheStatus={modelCacheStatus}
                 downloadProgress={downloadProgress}
                 currentAssistantMessage={currentAssistantMessage}
+                currentMessageDuration={currentMessageDuration}
                 transcript={transcript}
                 turnCount={turnCount}
             />

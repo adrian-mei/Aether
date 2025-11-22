@@ -42,7 +42,7 @@ export class KokoroService implements ITextToSpeechService {
   private generatePromise: { 
       resolve: (result?: AudioGenerationResult | Promise<void> | void) => void; 
       reject: (err: unknown) => void;
-      onStart?: () => void;
+      onStart?: (duration: number) => void;
       returnAudio?: boolean;
   } | null = null;
   
@@ -136,7 +136,8 @@ export class KokoroService implements ITextToSpeechService {
         }
         this.initializationPromise = null; // Clear promise so it can be retried if needed (though usually redundant once ready)
     } else if (type === 'audio') {
-        logger.debug('KOKORO', 'Audio generation complete', { sampleRate, length: audio.length });
+        const duration = audio.length / sampleRate;
+        logger.debug('KOKORO', 'Audio generation complete', { sampleRate, length: audio.length, duration });
         if (this.generatePromise) {
             if (this.generatePromise.returnAudio) {
                 // Return the raw buffer instead of playing
@@ -145,7 +146,7 @@ export class KokoroService implements ITextToSpeechService {
             } else {
                 // Play immediately (default behavior)
                 if (this.generatePromise.onStart) {
-                    this.generatePromise.onStart();
+                    this.generatePromise.onStart(duration);
                 }
                 // Hand off to audio player (which queues it) and resolve immediately
                 // so the next sentence can be generated in parallel.
@@ -190,7 +191,7 @@ export class KokoroService implements ITextToSpeechService {
    * Generates and plays audio immediately.
    * Returns a promise that resolves to a Playback Promise (which resolves when audio finishes).
    */
-  public async speak(text: string, voiceId?: string, onPlaybackStart?: () => void): Promise<Promise<void>> {
+  public async speak(text: string, voiceId?: string, onPlaybackStart?: (duration: number) => void): Promise<Promise<void>> {
     try {
       if (!this.isReady) {
         await this.initialize();

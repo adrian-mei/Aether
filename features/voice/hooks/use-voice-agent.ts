@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/shared/lib/logger';
 import { useSpeechRecognition } from './use-speech-recognition';
 import { useTTS } from './use-tts';
@@ -10,6 +10,12 @@ export function useVoiceAgent(
   onSilence?: () => void
 ) {
   const [state, setState] = useState<VoiceAgentState>('idle');
+  const stateRef = useRef(state);
+
+  // Keep ref in sync
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
   
   // 1. Speech Recognition
   const { 
@@ -17,7 +23,8 @@ export function useVoiceAgent(
     transcript, 
     error: recognitionError, 
     startListening: startSR, 
-    stopListening: stopSR 
+    stopListening: stopSR,
+    resetTranscript
   } = useSpeechRecognition({
     onInputComplete: (text) => {
       setState('processing');
@@ -81,21 +88,34 @@ export function useVoiceAgent(
     setState('idle');
   }, [stopSR, stopTTS]);
 
-  const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: () => void } = { autoResume: true }) => {
+  const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: (duration: number) => void } = { autoResume: true }) => {
       // Stop listening while speaking
       stopSR();
-      setState('speaking');
+      // Show 'processing' (Reflecting) state while buffering audio, instead of 'speaking' immediately
+      setState('processing');
       
-      await speakTTS(text, options, () => {
+      // Wrap options to reset transcript when speech starts
+      const wrappedOptions = {
+          ...options,
+          onStart: (duration: number) => {
+              // Clear user transcript now that Aether is speaking
+              resetTranscript();
+              if (options.onStart) options.onStart(duration);
+          }
+      };
+
+      await speakTTS(text, wrappedOptions, () => {
           // On Complete
-          if (options.autoResume && state !== 'muted') {
+          // Use ref to check current state (avoiding closure staleness)
+          if (options.autoResume && stateRef.current !== 'muted') {
               logger.info('VOICE', 'Auto-resuming listening');
               startListening();
           } else {
-              setState(state === 'muted' ? 'muted' : 'idle');
+              // If we were muted during speech, stay muted. Otherwise idle.
+              setState(stateRef.current === 'muted' ? 'muted' : 'idle');
           }
       });
-  }, [speakTTS, stopSR, startListening, state]);
+  }, [speakTTS, stopSR, startListening]); // Removed 'state' dependency to avoid recreation loop, relying on ref
 
   return {
     state,

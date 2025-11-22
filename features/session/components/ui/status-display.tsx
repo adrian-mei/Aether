@@ -13,6 +13,7 @@ interface StatusDisplayProps {
   modelCacheStatus: ModelCacheStatus;
   downloadProgress: number | null;
   currentAssistantMessage?: string;
+  currentMessageDuration?: number;
   transcript?: string;
   turnCount: number;
 }
@@ -24,6 +25,7 @@ export const StatusDisplay = ({
   modelCacheStatus,
   downloadProgress,
   currentAssistantMessage,
+  currentMessageDuration,
   transcript,
   turnCount,
 }: StatusDisplayProps) => {
@@ -31,8 +33,32 @@ export const StatusDisplay = ({
   const [shouldShowFeedback, setShouldShowFeedback] = useState(false);
   const [lastMessage, setLastMessage] = useState<string | undefined>(undefined);
   
+  // Calculate dynamic speed for true sync
+  // We want typing to finish when audio finishes.
+  // Start time: 0ms delay (Immediate).
+  // End time: +Duration * 1000ms.
+  // Typing time: (Duration * 1000).
+  const calculateSpeed = () => {
+      if (!currentAssistantMessage || !currentMessageDuration) return 40; // Default fallback
+      
+      const durationMs = currentMessageDuration * 1000;
+      const textLength = currentAssistantMessage.length;
+      
+      // If audio is too short, just type fast enough to show it (e.g. 200ms min)
+      // Removed the -500ms offset to start immediately
+      const availableTime = Math.max(durationMs, 100);
+      
+      const speed = availableTime / textLength;
+      // Clamp to reasonable values? e.g. min 10ms, max 100ms?
+      // No, let it match exactly.
+      return Math.max(speed, 5); 
+  };
+
+  const dynamicSpeed = calculateSpeed();
+
   // Apply typewriter effect to assistant message
-  const animatedAssistantMessage = useTypewriter(currentAssistantMessage, 25, 500);
+  // Reduced delay from 500ms to 0ms for instant start
+  const animatedAssistantMessage = useTypewriter(currentAssistantMessage, dynamicSpeed, 0);
 
   // Reset feedback state when message changes
   useEffect(() => {
@@ -68,18 +94,13 @@ export const StatusDisplay = ({
         return { text: 'Microphone Access Denied', subtext: 'Please enable microphone permissions' };
     }
     
-    // Handle Gamified Download State (Prioritize over permission pending)
-    if (downloadProgress !== null && downloadProgress < 100) {
-         let text = "Initializing...";
-         if (downloadProgress < 20) text = "Establishing Neural Link...";
-         else if (downloadProgress < 40) text = "Downloading Voice Patterns...";
-         else if (downloadProgress < 60) text = "Calibrating Empathy Engine...";
-         else if (downloadProgress < 80) text = "Allocating WebGPU Buffers...";
-         else text = "Synthesizing Emotional Tones...";
-
+    // Handle Download/Boot/Init State (Prioritize over permission pending)
+    // Show loading if downloading (<100) OR if still in booting/initializing state
+    // This unifies "Waking Up" and "Booting" into a single consistent "Initializing..." screen
+    if ((downloadProgress !== null && downloadProgress < 100) || sessionStatus === 'booting' || sessionStatus === 'initializing') {
         return {
-            text: text,
-            subtext: `${Math.round(downloadProgress)}% Complete`
+            text: "Initializing...",
+            subtext: downloadProgress ? `${Math.round(downloadProgress)}% Complete` : 'Preparing...'
         };
     }
 
@@ -89,10 +110,6 @@ export const StatusDisplay = ({
 
     if (sessionStatus === 'limit-reached') {
         return { text: 'Session Limit', subtext: 'Thank you for visiting' };
-    }
-
-    if (sessionStatus === 'initializing') {
-        return { text: 'Waking Up', subtext: 'Checking resources...' };
     }
     
     if (sessionStatus === 'awaiting-boot') {
@@ -126,18 +143,32 @@ export const StatusDisplay = ({
         return { text: animatedAssistantMessage, subtext: 'Aether' };
     }
 
-    // 3. State Message (Lowest Priority)
+    // 3. Faded Previous Context (When Listening OR Processing without transcript)
+    // Keep user engaged by showing the last message faded instead of just "I'm listening" or "Reflecting"
+    // This ensures the panel "sticks" to the last known context until new content arrives
+    if ((uiVoiceState === 'listening' || uiVoiceState === 'processing') && lastMessage) {
+        const subtext = uiVoiceState === 'processing' ? 'Thinking...' : 'Listening...';
+        return { text: lastMessage, subtext, isFaded: true };
+    }
+
+    // 4. State Message (Lowest Priority)
     return messages[uiVoiceState] || messages.idle;
   };
 
-  const { text, subtext } = getStateMessage();
+  const stateMessage = getStateMessage();
+  // Handle both simple object and extended object with isFaded
+  const text = stateMessage.text;
+  const subtext = stateMessage.subtext;
+  const isFaded = 'isFaded' in stateMessage ? stateMessage.isFaded : false;
 
   return (
     <div className="relative w-full max-w-[280px] md:max-w-none">
-      <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/50 to-teal-950/40 rounded-2xl px-6 md:px-10 py-4 md:py-5 border border-emerald-400/10 shadow-lg w-full md:min-w-[280px]">
+      {/* Added min-h-[140px] to prevent layout shifts (flickering) when text changes */}
+      <div className="backdrop-blur-xl bg-gradient-to-br from-emerald-950/50 to-teal-950/40 rounded-2xl px-6 md:px-10 py-4 md:py-5 border border-emerald-400/10 shadow-lg w-full md:min-w-[280px] min-h-[140px] flex flex-col justify-center">
         <div className="text-center space-y-1">
           <p className={`
             text-lg md:text-xl font-light tracking-wide transition-all duration-500
+            ${isFaded ? 'opacity-40 blur-[0.5px]' : ''}
             ${uiVoiceState === 'listening' ? 'text-emerald-300' : 
               uiVoiceState === 'speaking' ? 'text-lime-300' :
               uiVoiceState === 'processing' ? 'text-teal-300' :

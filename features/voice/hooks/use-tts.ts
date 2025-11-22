@@ -14,7 +14,7 @@ export function useTTS() {
     };
   }, []);
 
-  const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: () => void } = { autoResume: true }, onComplete?: () => void) => {
+  const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: (duration: number) => void } = { autoResume: true }, onComplete?: () => void) => {
     // Interruption handling
     if (synth?.speaking) {
         logger.info('VOICE', 'Interrupting current speech');
@@ -22,7 +22,7 @@ export function useTTS() {
     }
     kokoroService.stop();
 
-    setIsSpeaking(true);
+    // setIsSpeaking(true); // Delayed until actual playback starts
     logger.info('VOICE', 'Requesting speech', { textLength: text.length });
 
     try {
@@ -32,9 +32,9 @@ export function useTTS() {
         const playbackPromise = await kokoroService.speak(
             text, 
             voiceId,
-            () => {
+            (duration: number) => {
                 setIsSpeaking(true);
-                if (options.onStart) options.onStart();
+                if (options.onStart) options.onStart(duration);
             }
         );
         
@@ -74,7 +74,11 @@ export function useTTS() {
     utterance.volume = 1.0;
 
     utterance.onstart = () => {
-        if (options.onStart) options.onStart();
+        setIsSpeaking(true);
+        // Web Speech doesn't give duration upfront easily, fallback to 0 or estimate?
+        // Estimated duration: 15 chars per second?
+        const estimatedDuration = text.length / 15; 
+        if (options.onStart) options.onStart(estimatedDuration);
     };
 
     utterance.onend = () => {

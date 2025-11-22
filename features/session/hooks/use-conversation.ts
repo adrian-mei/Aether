@@ -9,7 +9,7 @@ import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
 interface UseConversationProps {
   accessCode: string;
   interactionCount: number;
-  onSpeak: (text: string, options?: { autoResume?: boolean; onStart?: () => void }) => Promise<void>;
+  onSpeak: (text: string, options?: { autoResume?: boolean; onStart?: (duration: number) => void }) => Promise<void>;
   onSessionEnd: () => void;
   isSessionActive: boolean;
 }
@@ -22,6 +22,7 @@ export function useConversation({
   isSessionActive
 }: UseConversationProps) {
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
+  const [currentMessageDuration, setCurrentMessageDuration] = useState<number>(0);
   
   const historyRef = useRef<ChatMessage[]>([]);
   const isProcessingRef = useRef(false);
@@ -32,7 +33,10 @@ export function useConversation({
     onSpeak: async (text, options) => {
       await onSpeak(text, {
         ...options,
-        onStart: () => setCurrentAssistantMessage(text)
+        onStart: (duration) => {
+            setCurrentAssistantMessage(text);
+            setCurrentMessageDuration(duration);
+        }
       });
     }
   });
@@ -194,11 +198,14 @@ export function useConversation({
     const message: ChatMessage = { role: 'assistant', content: text };
     historyRef.current = [...historyRef.current, message];
     setCurrentAssistantMessage(text);
+    // Note: injectAssistantMessage doesn't have audio duration context, 
+    // so default to 0 or let speak() handle it via onStart if used with speak().
   }, []);
 
   return {
     state: {
       currentAssistantMessage,
+      currentMessageDuration,
       isProcessing: isProcessingRef.current,
       lastActivity: lastActivityRef.current,
       turnCount: Math.floor(historyRef.current.length / 2)

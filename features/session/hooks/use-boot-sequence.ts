@@ -63,7 +63,7 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
       audioPlayer.resume().catch(err => logger.warn('APP', 'Failed to resume audio context', err));
 
       // 4. Run Animation Loop
-      const TARGET_DURATION = 8000;
+      const TARGET_DURATION = 2500;
       const UPDATE_INTERVAL = 50;
       let startTime = Date.now();
 
@@ -93,7 +93,7 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
 
           if (virtualProgress >= 100 && isServicesReadyRef.current) {
               clearInterval(interval);
-              setIsBooting(false);
+              // setIsBooting(false); // Removed: Keep booting state until onComplete finishes
               
               // 5. Auto-Start Session
               try {
@@ -104,6 +104,9 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
                   logger.error('SESSION', 'Auto-start failed', e);
                   // Even if failed, we call onComplete with false or handle error
                   setPermissionStatus('denied');
+              } finally {
+                  // Only end booting state when session start is fully resolved
+                  setIsBooting(false);
               }
           }
       }, UPDATE_INTERVAL);

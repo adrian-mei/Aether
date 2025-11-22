@@ -52,6 +52,7 @@ export function useSpeechRecognition({ onInputComplete, onSilence }: UseSpeechRe
   const watchdogTimer = useRef<NodeJS.Timeout | null>(null);
   const transcriptRef = useRef('');
   const retryCount = useRef(0);
+  const shouldKeepListening = useRef(false);
   
   const MAX_RETRIES = 2;
   const SILENCE_TIMEOUT_MS = 1000;
@@ -76,9 +77,9 @@ export function useSpeechRecognition({ onInputComplete, onSilence }: UseSpeechRe
         // Start watchdog
         if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
         watchdogTimer.current = setTimeout(() => {
-            logger.warn('VOICE', 'Watchdog timeout (no speech detected)', { timeoutMs: WATCHDOG_TIMEOUT_MS });
+            logger.warn('VOICE', 'Watchdog timeout (no speech detected) - Restarting', { timeoutMs: WATCHDOG_TIMEOUT_MS });
             rec.stop();
-            if (onSilence) onSilence();
+            // Don't call onSilence here, let onend restart it if shouldKeepListening is true
         }, WATCHDOG_TIMEOUT_MS);
       };
 
@@ -102,6 +103,7 @@ export function useSpeechRecognition({ onInputComplete, onSilence }: UseSpeechRe
               transcript: transcriptRef.current,
               timeoutMs: SILENCE_TIMEOUT_MS
             });
+            shouldKeepListening.current = false; // Intentional stop for processing
             rec.stop();
             onInputComplete(transcriptRef.current);
           }
@@ -133,18 +135,31 @@ export function useSpeechRecognition({ onInputComplete, onSilence }: UseSpeechRe
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
         if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
 
-        // Check for retry
-        if (retryCount.current > 0 && retryCount.current <= MAX_RETRIES) {
-            logger.info('VOICE', 'Restarting listening (retry strategy)', { retry: retryCount.current });
+        // Auto-restart if we should be listening
+        if (shouldKeepListening.current) {
+            logger.info('VOICE', 'Auto-restarting listening (continuous mode)');
             try {
                 rec.start();
             } catch (e) {
-                logger.error('VOICE', 'Failed to restart recognition', e as Error);
+                logger.error('VOICE', 'Failed to auto-restart recognition', e as Error);
+                // If restart fails, maybe wait a bit? 
+                // But preventing infinite loops is handled by browser limits usually.
+                // For now, if start throws, we might be in a bad state.
+                // Maybe trigger error?
+                shouldKeepListening.current = false;
+                if (onSilence) onSilence();
             }
-        } else if (retryCount.current > MAX_RETRIES) {
-             logger.info('VOICE', 'Max retries reached, triggering silence handler');
-             retryCount.current = 0;
-             if (onSilence) onSilence();
+        } else {
+            // Only check retries if we weren't trying to keep listening (e.g. if it stopped due to error but we didn't set shouldKeepListening yet?)
+            // Actually shouldKeepListening covers the "Intentional" state.
+            // If error happened, we might want to retry even if shouldKeepListening was false? 
+            // No, startListening sets it true.
+            
+            if (retryCount.current > MAX_RETRIES) {
+                 logger.info('VOICE', 'Max retries reached, triggering silence handler');
+                 retryCount.current = 0;
+                 if (onSilence) onSilence();
+            }
         }
       };
 
@@ -154,6 +169,7 @@ export function useSpeechRecognition({ onInputComplete, onSilence }: UseSpeechRe
 
   const startListening = useCallback(() => {
     logger.info('VOICE', 'Starting listening');
+    shouldKeepListening.current = true;
     try {
       recognitionRef.current?.start();
     } catch (e: unknown) {
@@ -168,10 +184,16 @@ export function useSpeechRecognition({ onInputComplete, onSilence }: UseSpeechRe
 
   const stopListening = useCallback(() => {
     logger.info('VOICE', 'Stopping listening');
+    shouldKeepListening.current = false;
     if (silenceTimer.current) clearTimeout(silenceTimer.current);
     if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
     retryCount.current = 0;
     recognitionRef.current?.stop();
+  }, []);
+
+  const resetTranscript = useCallback(() => {
+      setTranscript('');
+      transcriptRef.current = '';
   }, []);
 
   return {
@@ -179,6 +201,7 @@ export function useSpeechRecognition({ onInputComplete, onSilence }: UseSpeechRe
     transcript,
     error,
     startListening,
-    stopListening
+    stopListening,
+    resetTranscript
   };
 }

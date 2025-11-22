@@ -8,6 +8,7 @@ import { kokoroService } from '@/features/voice/services/kokoro-service';
 import { useSessionAccess } from './use-session-access';
 import { useBootSequence } from './use-boot-sequence';
 import { useConversation } from './use-conversation';
+import { useConversationFlow } from './use-conversation-flow';
 
 export type SessionStatus = 'initializing' | 'awaiting-boot' | 'booting' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
@@ -23,13 +24,8 @@ export function useSessionManager() {
     onComplete: async (granted) => {
       if (granted) {
         setStatus('running');
-        const greeting = "Hello, I am Aether. I'm here to listen, validate your feelings, and help you explore your inner world without judgment. How are you feeling right now?";
-        
-        // Inject greeting as assistant message (don't trigger LLM)
-        conversation.actions.injectAssistantMessage(greeting);
-        
-        // Speak it
-        speak(greeting);
+        // Use the flow manager to handle introduction
+        await flow.actions.startIntroduction();
       } else {
         setStatus('idle');
       }
@@ -65,6 +61,13 @@ export function useSessionManager() {
         resetRef.current();
         setStatus('idle');
     }
+  });
+
+  // 5. Conversation Flow
+  const flow = useConversationFlow({
+    onSpeak: speak,
+    injectAssistantMessage: conversation.actions.injectAssistantMessage,
+    startListening
   });
 
   // Connect Refs
@@ -186,6 +189,7 @@ export function useSessionManager() {
       voiceState,
       permissionStatus: boot.state.permissionStatus,
       currentAssistantMessage: conversation.state.currentAssistantMessage,
+      currentMessageDuration: conversation.state.currentMessageDuration,
       modelCacheStatus: boot.state.modelCacheStatus,
       downloadProgress: boot.state.downloadProgress,
       transcript,

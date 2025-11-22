@@ -18,6 +18,7 @@ export function SessionContainer() {
         modelCacheStatus={state.modelCacheStatus}
         downloadProgress={state.downloadProgress}
         currentAssistantMessage={state.currentAssistantMessage}
+        currentMessageDuration={state.currentMessageDuration}
         transcript={state.transcript}
         turnCount={state.turnCount}
         onStartSession={state.status === 'awaiting-boot' ? actions.startBootSequence : actions.handleStartSession}
