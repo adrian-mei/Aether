@@ -17,6 +17,7 @@ interface UseAetherVisualsProps {
   currentAssistantMessage?: string;
   currentMessageDuration?: number;
   transcript?: string;
+  isOnline?: boolean;
 }
 
 export function useAetherVisuals({ 
@@ -27,7 +28,8 @@ export function useAetherVisuals({
   downloadProgress,
   currentAssistantMessage,
   currentMessageDuration,
-  transcript
+  transcript,
+  isOnline = true
 }: UseAetherVisualsProps) {
   
   // 1. Map actual voiceState to UI state
@@ -81,6 +83,9 @@ export function useAetherVisuals({
   // 6. Visual Status Text Logic
   const visualStatus = useMemo(() => {
     // A. Critical Errors/States
+    if (!isOnline) {
+        return { text: 'No Connection', subtext: 'Checking network...' };
+    }
     if (sessionStatus === 'insecure-context') {
         return { text: 'Connection Not Secure', subtext: 'Please use HTTPS or localhost' };
     }
@@ -159,7 +164,8 @@ export function useAetherVisuals({
     transcript, 
     currentAssistantMessage, 
     animatedAssistantMessage, 
-    lastMessage
+    lastMessage,
+    isOnline
   ]);
 
   return {

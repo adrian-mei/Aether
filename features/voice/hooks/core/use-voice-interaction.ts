@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/shared/lib/logger';
 import { useSpeechRecognition } from '../recognition/use-speech-recognition';
 import { useTTS } from '../synthesis/use-tts';
+import { audioPlayer } from '@/features/voice/utils/audio-player';
 
 export type VoiceInteractionState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
 
@@ -46,6 +47,8 @@ export function useVoiceInteraction() {
     stop: stopTTS 
   } = useTTS();
 
+  const wasListeningRef = useRef(false);
+
   // Derived State
   let state: VoiceInteractionState = 'idle';
   if (recognitionError === 'permission-denied') {
@@ -76,6 +79,44 @@ export function useVoiceInteraction() {
     stopTTS();
     setManualState(null);
   }, [stopSR, stopTTS]);
+
+  // Handle visibility changes (Mobile lifecycle)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.hidden) {
+        if (stateRef.current === 'listening') {
+            logger.info('VOICE', 'App backgrounded, pausing listening');
+            wasListeningRef.current = true;
+            stopSR();
+        } else {
+            wasListeningRef.current = false;
+        }
+        
+        // Stop speaking on background to prevent battery drain/quirks
+        if (isSpeaking) {
+             stopTTS();
+        }
+      } else {
+        // App foregrounded
+        logger.info('VOICE', 'App foregrounded');
+        
+        // Resume Audio Context (Vital for iOS)
+        try {
+            await audioPlayer.resume();
+        } catch (e) {
+            logger.warn('VOICE', 'Failed to resume audio context on foreground', e);
+        }
+
+        if (wasListeningRef.current && stateRef.current !== 'muted') {
+            logger.info('VOICE', 'Resuming listening from background state');
+            startListening();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isSpeaking, stopSR, startListening, stopTTS]);
 
   const toggleMute = useCallback(() => {
     if (stateRef.current === 'muted') {

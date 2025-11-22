@@ -12,6 +12,7 @@ import { chatService } from '@/features/ai/services/chat-service';
 // Hooks
 import { useAetherVisuals } from '../hooks/visuals/use-aether-visuals';
 import { useSessionAudio } from '../hooks/audio/use-session-audio';
+import { useOnlineStatus } from '@/shared/hooks/use-online-status';
 
 // Sub-components
 import { Header } from './layouts/header';
@@ -21,6 +22,7 @@ import { OrbContainer } from './visuals/orb-container';
 import { StatusDisplay } from './status/status-display';
 import { DebugPanelLeft } from './debug/debug-panel-left';
 import { DebugPanelRight } from './debug/debug-panel-right';
+import { LandscapeWarning } from './layouts/landscape-warning';
 
 interface AetherUIProps {
   voiceState: VoiceInteractionState;
@@ -60,6 +62,7 @@ export const AetherUI = ({
   onToggleDebug
 }: AetherUIProps) => {
   const [isModalDismissed, setIsModalDismissed] = useState(false);
+  const isOnline = useOnlineStatus();
   
   // Custom Hooks
   const { 
@@ -75,7 +78,8 @@ export const AetherUI = ({
     downloadProgress,
     currentAssistantMessage,
     currentMessageDuration,
-    transcript
+    transcript,
+    isOnline
   });
   
   const { playOcean } = useSessionAudio({ sessionStatus });
@@ -113,6 +117,7 @@ export const AetherUI = ({
     // Trigger background audio
     playOcean();
 
+    if (!isOnline) return;
     if (sessionStatus === 'unsupported' || sessionStatus === 'insecure-context') return;
     
     if (sessionStatus === 'idle' || sessionStatus === 'awaiting-boot') {
@@ -124,6 +129,8 @@ export const AetherUI = ({
 
   return (
     <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none">
+      <LandscapeWarning />
+      
       <WaitlistModal 
         isOpen={sessionStatus === 'limit-reached' && !isModalDismissed} 
         onJoin={(email) => console.log('Waitlist join:', email)} 
