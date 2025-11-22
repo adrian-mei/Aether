@@ -88,7 +88,7 @@ export const OrbContainer = ({
           ref={orbRef}
           onClick={onInteraction}
           className={`
-            relative w-56 h-56 md:w-64 md:h-64 rounded-full
+            relative w-[35vmin] h-[35vmin] max-w-[256px] max-h-[256px] min-w-[200px] min-h-[200px] rounded-full
             bg-gradient-to-br ${getOrbGradient()}
             ${getOrbShadow()}
             backdrop-blur-2xl

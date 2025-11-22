@@ -84,7 +84,7 @@ export const AetherUI = ({
   };
 
   return (
-    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950">
+    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none">
       <WaitlistModal 
         isOpen={sessionStatus === 'limit-reached' && !isModalDismissed} 
         onJoin={(email) => console.log('Waitlist join:', email)} 
@@ -111,7 +111,8 @@ export const AetherUI = ({
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-col items-center justify-between h-full px-4 py-6 md:px-6 md:py-8">
+      {/* Added pb-safe to respect iOS home bar area */}
+      <div className="relative z-10 flex flex-col items-center justify-between h-full px-4 py-4 md:px-6 md:py-8 pb-safe">
         
         <Header uiVoiceState={uiVoiceState} />
 

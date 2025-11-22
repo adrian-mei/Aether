@@ -3,7 +3,7 @@ import { logger } from '@/shared/lib/logger';
 import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
 
 const MAX_INTERACTIONS = 10;
-const RESET_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours
+const RESET_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
 export interface SessionAccessState {
   interactionCount: number;
