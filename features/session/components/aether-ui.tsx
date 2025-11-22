@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
+import { VoiceInteractionState } from '@/features/voice/hooks/core/use-voice-interaction';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
@@ -23,7 +23,7 @@ import { DebugPanelLeft } from './debug/debug-panel-left';
 import { DebugPanelRight } from './debug/debug-panel-right';
 
 interface AetherUIProps {
-  voiceState: VoiceAgentState;
+  voiceState: VoiceInteractionState;
   permissionStatus: PermissionStatus;
   sessionStatus: SessionStatus;
   modelCacheStatus: ModelCacheStatus;

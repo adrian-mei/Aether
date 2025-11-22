@@ -10,7 +10,7 @@ jest.mock('@/features/ai/services/chat-service', () => ({
 }));
 jest.mock('@/features/memory/services/memory-service');
 jest.mock('@/shared/lib/logger');
-jest.mock('@/features/session/hooks/use-message-queue', () => ({
+jest.mock('@/features/session/hooks/utils/use-message-queue', () => ({
   useMessageQueue: () => ({
     handleChunk: jest.fn(),
     startStream: jest.fn(),

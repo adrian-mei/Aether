@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/shared/lib/logger';
-import { useSpeechRecognition } from './use-speech-recognition';
-import { useTTS } from './use-tts';
+import { useSpeechRecognition } from '../recognition/use-speech-recognition';
+import { useTTS } from '../synthesis/use-tts';
 
-export type VoiceAgentState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
+export type VoiceInteractionState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
 
-export function useVoiceAgent(
-  onInputComplete: (text: string) => void,
-  onSilence?: () => void
-) {
+export interface VoiceEvent {
+    type: 'input' | 'silence';
+    payload?: string | number;
+}
+
+export function useVoiceInteraction() {
   // Explicit overrides for states that cannot be purely derived from sub-hooks
   const [manualState, setManualState] = useState<'processing' | 'muted' | null>(null);
   
@@ -17,19 +19,25 @@ export function useVoiceAgent(
     isListening, 
     transcript, 
     error: recognitionError, 
+    lastInput,
+    silenceDetected,
     startListening: startSR, 
     stopListening: stopSR,
     resetTranscript
-  } = useSpeechRecognition({
-    onInputComplete: (text) => {
-      setManualState('processing');
-      onInputComplete(text);
-    },
-    onSilence: () => {
-        if (onSilence) onSilence();
-        setManualState(null);
-    }
-  });
+  } = useSpeechRecognition();
+
+  // Reactive State Logic
+  useEffect(() => {
+      if (lastInput) {
+          setManualState('processing');
+      }
+  }, [lastInput]);
+
+  useEffect(() => {
+      if (silenceDetected) {
+          setManualState(null);
+      }
+  }, [silenceDetected]);
 
   // 2. Text-to-Speech
   const { 
@@ -39,7 +47,7 @@ export function useVoiceAgent(
   } = useTTS();
 
   // Derived State
-  let state: VoiceAgentState = 'idle';
+  let state: VoiceInteractionState = 'idle';
   if (recognitionError === 'permission-denied') {
       state = 'permission-denied';
   } else if (isSpeaking) {
@@ -122,11 +130,13 @@ export function useVoiceAgent(
   return {
     state,
     transcript,
+    lastInput,
+    silenceDetected,
     startListening,
     stopListening,
     reset,
     speak,
     toggleMute,
-    setState: () => logger.warn('VOICE', 'setState is deprecated in useVoiceAgent') // No-op for compatibility
+    setState: () => logger.warn('VOICE', 'setState is deprecated in useVoiceInteraction') // No-op for compatibility
   };
 }

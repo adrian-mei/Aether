@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
+import { useVoiceInteraction } from './use-voice-interaction';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 
 // Mock dependencies
@@ -46,7 +46,7 @@ const mockSpeechSynthesis = {
   getVoices: jest.fn().mockReturnValue([]),
 };
 
-describe('useVoiceAgent', () => {
+describe('useVoiceInteraction', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     
@@ -68,14 +68,14 @@ describe('useVoiceAgent', () => {
   });
 
   it('should initialize with idle state', () => {
-    const { result } = renderHook(() => useVoiceAgent(jest.fn()));
+    const { result } = renderHook(() => useVoiceInteraction());
     
     expect(result.current.state).toBe('idle');
     // Kokoro initialization is now handled by useSessionManager
   });
 
   it('should start listening when requested', () => {
-    const { result } = renderHook(() => useVoiceAgent(jest.fn()));
+    const { result } = renderHook(() => useVoiceInteraction());
 
     act(() => {
       result.current.startListening();
@@ -85,7 +85,7 @@ describe('useVoiceAgent', () => {
   });
 
   it('should stop listening when requested', () => {
-    const { result } = renderHook(() => useVoiceAgent(jest.fn()));
+    const { result } = renderHook(() => useVoiceInteraction());
 
     act(() => {
       result.current.stopListening();
@@ -96,8 +96,7 @@ describe('useVoiceAgent', () => {
   });
 
   it('should handle speech input correctly', () => {
-    const onInputComplete = jest.fn();
-    renderHook(() => useVoiceAgent(onInputComplete));
+    const { result } = renderHook(() => useVoiceInteraction());
 
     // simulate speech recognition flow
     // 1. start
@@ -123,14 +122,14 @@ describe('useVoiceAgent', () => {
       jest.advanceTimersByTime(2500);
     });
 
-    expect(onInputComplete).toHaveBeenCalledWith('Hello world');
+    expect(result.current.lastInput).toEqual({ text: 'Hello world', timestamp: expect.any(Number) });
     expect(mockSpeechRecognition.stop).toHaveBeenCalled();
     
     jest.useRealTimers();
   });
 
   it('should use kokoro for speech output', async () => {
-    const { result } = renderHook(() => useVoiceAgent(jest.fn()));
+    const { result } = renderHook(() => useVoiceInteraction());
 
     let resolveSpeak: (value: void) => void;
     const speakPromise = new Promise<void>((resolve) => {
@@ -185,7 +184,7 @@ describe('useVoiceAgent', () => {
   });
 
   it('should toggle mute state', () => {
-    const { result } = renderHook(() => useVoiceAgent(jest.fn()));
+    const { result } = renderHook(() => useVoiceInteraction());
 
     // Mute
     act(() => {

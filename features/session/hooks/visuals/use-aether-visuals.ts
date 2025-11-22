@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
-import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
-import { SessionStatus } from './use-session-manager';
+import { VoiceInteractionState } from '@/features/voice/hooks/core/use-voice-interaction';
+import { SessionStatus } from '../use-session-manager';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
 import { useTypewriter } from './use-typewriter';
@@ -10,7 +10,7 @@ export type UIVoiceState = 'idle' | 'listening' | 'speaking' | 'processing' | 'e
 
 interface UseAetherVisualsProps {
   sessionStatus: SessionStatus;
-  voiceState: VoiceAgentState;
+  voiceState: VoiceInteractionState;
   permissionStatus: PermissionStatus;
   modelCacheStatus: ModelCacheStatus;
   downloadProgress: number | null;

@@ -1,14 +1,14 @@
 'use client';
 
 import { Network, MessageSquare, Activity, Mic, Shield, Database } from 'lucide-react';
-import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
+import { VoiceInteractionState } from '@/features/voice/hooks/core/use-voice-interaction';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
 import type { TokenUsage } from '@/features/ai/types/chat.types';
 
 interface DebugPanelLeftProps {
-  voiceState: VoiceAgentState;
+  voiceState: VoiceInteractionState;
   permissionStatus: PermissionStatus;
   sessionStatus: SessionStatus;
   modelCacheStatus: ModelCacheStatus;
@@ -115,13 +115,13 @@ export function DebugPanelLeft({
               <h5 className="text-[9px] font-bold text-slate-500 uppercase">Token Usage</h5>
               <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono">
                 <span className="text-slate-400">Input:</span>
-                <span className="text-slate-300 text-right">{tokenUsage.promptTokens}</span>
+                <span className="text-slate-300 text-right">{isNaN(tokenUsage.promptTokens) ? 0 : tokenUsage.promptTokens}</span>
                 
                 <span className="text-slate-400">Output:</span>
-                <span className="text-slate-300 text-right">{tokenUsage.completionTokens}</span>
+                <span className="text-slate-300 text-right">{isNaN(tokenUsage.completionTokens) ? 0 : tokenUsage.completionTokens}</span>
                 
                 <span className="text-slate-400">Total:</span>
-                <span className="text-indigo-300 text-right">{tokenUsage.totalTokens}</span>
+                <span className="text-indigo-300 text-right">{isNaN(tokenUsage.totalTokens) ? 0 : tokenUsage.totalTokens}</span>
                 
                 {tokenUsage.cost && (
                   <>

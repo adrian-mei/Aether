@@ -4,13 +4,14 @@ import { requestMicrophonePermission } from '@/features/voice/utils/permissions'
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 import { memoryService } from '@/features/memory/services/memory-service';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
-import { checkModelCache } from '@/features/voice/utils/model-cache';
+import { useSystemCheck } from '@/features/system/hooks/use-system-check';
 
 jest.mock('@/features/voice/utils/permissions');
 jest.mock('@/features/voice/services/kokoro-service');
 jest.mock('@/features/memory/services/memory-service');
 jest.mock('@/features/voice/utils/audio-player');
 jest.mock('@/features/voice/utils/model-cache');
+jest.mock('@/features/system/hooks/use-system-check');
 jest.mock('@/shared/lib/logger');
 
 describe('useBootSequence', () => {
@@ -24,7 +25,10 @@ describe('useBootSequence', () => {
     (kokoroService.onProgress as jest.Mock).mockImplementation(() => {});
     (memoryService.initialize as jest.Mock).mockResolvedValue(undefined);
     (audioPlayer.resume as jest.Mock).mockResolvedValue(undefined);
-    (checkModelCache as jest.Mock).mockResolvedValue('cached');
+    (useSystemCheck as jest.Mock).mockReturnValue({
+        modelCacheStatus: 'cached',
+        checkCache: jest.fn()
+    });
   });
 
   afterEach(() => {

@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
+import { useVoiceInteraction } from '@/features/voice/hooks/core/use-voice-interaction';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
 import { logger } from '@/shared/lib/logger';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 import { memoryService } from '@/features/memory/services/memory-service';
 
-import { useSessionAccess } from './use-session-access';
-import { useBootSequence } from './use-boot-sequence';
-import { useConversation } from './use-conversation';
-import { useConversationFlow } from './use-conversation-flow';
+import { useSessionAccess } from './access/use-session-access';
+import { useBootSequence } from './lifecycle/use-boot-sequence';
+import { useConversation } from './chat/use-conversation';
+import { useConversationFlow } from './chat/use-conversation-flow';
 
 export type SessionStatus = 'initializing' | 'awaiting-boot' | 'booting' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
@@ -42,15 +42,27 @@ export function useSessionManager() {
   const { 
     state: voiceState,
     transcript,
+    lastInput,
+    silenceDetected,
     startListening, 
     stopListening, 
     reset: resetVoice, 
     speak, 
     toggleMute
-  } = useVoiceAgent(
-    (text) => onInputCompleteRef.current(text),
-    () => onSilenceRef.current()
-  );
+  } = useVoiceInteraction();
+
+  // Handle Voice Events
+  useEffect(() => {
+      if (lastInput) {
+          onInputCompleteRef.current(lastInput.text);
+      }
+  }, [lastInput]);
+
+  useEffect(() => {
+      if (silenceDetected) {
+          onSilenceRef.current();
+      }
+  }, [silenceDetected]);
 
   // 4. Conversation Logic
   const conversation = useConversation({

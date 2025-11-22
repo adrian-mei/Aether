@@ -108,14 +108,24 @@ export function useConversation({
             handleChunk(chunk);
           },
           (usage) => {
-              setTokenUsage(prev => ({
-                  promptTokens: prev.promptTokens + usage.promptTokens,
-                  completionTokens: prev.completionTokens + usage.completionTokens,
-                  totalTokens: prev.totalTokens + usage.totalTokens,
-                  // Keep the latest cost/model for reference, or accumulate cost if parsed
-                  cost: `$${(parseFloat(prev.cost?.replace('$', '') || '0') + parseFloat(usage.cost?.replace('$', '') || '0')).toFixed(5)}`,
-                  model: usage.model
-              }));
+              setTokenUsage(prev => {
+                  const safePromptTokens = usage.promptTokens || 0;
+                  const safeCompletionTokens = usage.completionTokens || 0;
+                  const safeTotalTokens = usage.totalTokens || 0;
+                  
+                  const prevCost = parseFloat(prev.cost?.replace('$', '') || '0');
+                  const newCost = parseFloat(usage.cost?.replace('$', '') || '0');
+                  const totalCost = (isNaN(prevCost) ? 0 : prevCost) + (isNaN(newCost) ? 0 : newCost);
+
+                  return {
+                      promptTokens: prev.promptTokens + safePromptTokens,
+                      completionTokens: prev.completionTokens + safeCompletionTokens,
+                      totalTokens: prev.totalTokens + safeTotalTokens,
+                      // Keep the latest cost/model for reference, or accumulate cost if parsed
+                      cost: `$${totalCost.toFixed(5)}`,
+                      model: usage.model
+                  };
+              });
           }
       );
       
