@@ -93,8 +93,13 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
 
           if (virtualProgress >= 100 && isServicesReadyRef.current) {
               clearInterval(interval);
-              // setIsBooting(false); // Removed: Keep booting state until onComplete finishes
               
+              // Re-check cache status now that download should be complete
+              checkModelCache().then(status => {
+                  setModelCacheStatus(status);
+                  logger.info('SESSION', 'Final model cache status', { status });
+              });
+
               // 5. Auto-Start Session
               try {
                   const granted = await permissionPromise;

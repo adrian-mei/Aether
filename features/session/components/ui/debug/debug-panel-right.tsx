@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { logger, LogEntry } from '@/shared/lib/logger';
-import { Search, Trash2, Copy, Check } from 'lucide-react';
+import { Search, Trash2, Copy, Check, ChevronRight, ChevronDown } from 'lucide-react';
 
 export function DebugPanelRight() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  // Lazy init state from localStorage (safe because this component is only mounted on client when debug mode is active)
+  // Lazy init state from localStorage
   const [showVerbose, setShowVerbose] = useState(() => {
     if (typeof window !== 'undefined') {
         return localStorage.getItem('debug_verbose') === 'true';
@@ -26,12 +26,11 @@ export function DebugPanelRight() {
     return () => unsubscribe();
   }, []);
 
-  // Persist verbose setting
   useEffect(() => {
     localStorage.setItem('debug_verbose', String(showVerbose));
   }, [showVerbose]);
 
-  // Auto-scroll
+  // Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -66,7 +65,7 @@ export function DebugPanelRight() {
     const filtered = getFilteredLogs();
     const text = filtered.map(l => {
       const time = new Date(l.timestamp).toLocaleTimeString();
-      const dataStr = l.data ? ` ${typeof l.data === 'object' ? JSON.stringify(l.data) : String(l.data)}` : '';
+      const dataStr = l.data ? ` ${typeof l.data === 'object' ? JSON.stringify(l.data, null, 2) : String(l.data)}` : '';
       return `[${time}] [${l.category}] [${l.level.toUpperCase()}] ${l.message}${dataStr}`;
     }).join('\n');
 
@@ -77,27 +76,27 @@ export function DebugPanelRight() {
   };
 
   return (
-    <div className="absolute right-4 top-24 bottom-24 w-80 bg-black/20 backdrop-blur-sm border border-white/5 rounded-lg flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4 hidden md:flex">
-      {/* Toolbar */}
-      <div className="p-2 border-b border-white/5 bg-black/20 flex items-center justify-between gap-2">
-        <div className="flex items-center bg-black/20 rounded px-2 py-1 border border-white/5 flex-1">
-            <Search size={12} className="text-slate-500 mr-2" />
+    <div className="absolute right-4 top-24 bottom-24 w-96 bg-[#1e1e1e] backdrop-blur-md border border-white/10 rounded-lg flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4 hidden md:flex shadow-2xl">
+      {/* Toolbar - "Monokai/Sublime" Header Style */}
+      <div className="p-2 border-b border-white/5 bg-[#252526] flex items-center justify-between gap-2">
+        <div className="flex items-center bg-[#3c3c3c] rounded px-2 py-1 border border-transparent focus-within:border-[#007acc] flex-1 transition-all">
+            <Search size={12} className="text-gray-400 mr-2" />
             <input 
                 type="text" 
-                placeholder="Filter logs..." 
+                placeholder="Filter..." 
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
-                className="bg-transparent border-none outline-none text-[10px] w-full text-slate-300 placeholder-slate-600 transition-all"
+                className="bg-transparent border-none outline-none text-[11px] w-full text-gray-200 placeholder-gray-500 font-mono"
             />
         </div>
         
         <div className="flex items-center gap-1">
             <button 
                 onClick={() => setShowVerbose(!showVerbose)}
-                className={`px-2 py-1 rounded text-[9px] font-medium border transition-colors ${
+                className={`px-2 py-1 rounded text-[9px] font-bold font-mono border transition-colors ${
                   showVerbose
-                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' 
-                    : 'text-slate-500 border-transparent hover:bg-white/5'
+                    ? 'bg-[#0e639c] text-white border-[#0e639c]' 
+                    : 'text-gray-400 border-transparent hover:bg-[#2d2d2d]'
                 }`}
             >
                 {showVerbose ? 'ALL' : 'IMP'}
@@ -105,7 +104,7 @@ export function DebugPanelRight() {
             
             <button 
                 onClick={handleCopyLogs} 
-                className={`p-1.5 rounded transition-colors ${isCopied ? 'text-green-400 bg-green-500/10' : 'text-slate-500 hover:text-blue-400 hover:bg-white/5'}`} 
+                className={`p-1.5 rounded transition-colors ${isCopied ? 'text-green-400 bg-green-500/10' : 'text-gray-400 hover:text-white hover:bg-[#2d2d2d]'}`} 
                 title="Copy Logs"
             >
                 {isCopied ? <Check size={12} /> : <Copy size={12} />}
@@ -113,7 +112,7 @@ export function DebugPanelRight() {
             
             <button 
                 onClick={clearLogs} 
-                className="p-1.5 rounded text-slate-500 hover:text-red-400 hover:bg-white/5 transition-colors" 
+                className="p-1.5 rounded text-gray-400 hover:text-red-400 hover:bg-[#2d2d2d] transition-colors" 
                 title="Clear Logs"
             >
                 <Trash2 size={12} />
@@ -121,49 +120,82 @@ export function DebugPanelRight() {
         </div>
       </div>
 
-      {/* Log List */}
+      {/* Log List - "Code Editor" Look */}
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-2 space-y-0.5"
+        className="flex-1 overflow-y-auto p-1 space-y-[1px] font-mono text-[10px] bg-[#1e1e1e]"
       >
         {getFilteredLogs().length === 0 && (
-          <div className="text-slate-600 italic text-center py-8 text-[10px]">
+          <div className="text-gray-500 italic text-center py-8 text-[11px]">
             {filterText ? 'No matching logs' : 'No logs yet'}
           </div>
         )}
         
         {getFilteredLogs().map((log, i) => (
-          <div key={i} className="flex items-start gap-2 hover:bg-white/5 p-1 rounded group text-[10px] leading-tight font-mono transition-colors">
-             <span className="text-slate-600 shrink-0 w-12 text-[9px] pt-0.5">
-                {new Date(log.timestamp).toLocaleTimeString().split(' ')[0]}
-             </span>
-             
-             <span className={`shrink-0 w-10 text-center font-bold rounded px-1 py-0.5 text-[8px] uppercase ${
-                 log.category === 'VOICE' ? 'bg-purple-900/30 text-purple-400' :
-                 log.category === 'API' ? 'bg-blue-900/30 text-blue-400' :
-                 log.category === 'APP' ? 'bg-green-900/30 text-green-400' :
-                 'bg-slate-800 text-slate-400'
-             }`}>
-                 {log.category}
-             </span>
-
-             <div className="flex-1 min-w-0 break-words">
-                <span className={`${
-                  log.level === 'error' ? 'text-red-400 font-bold' : 
-                  log.level === 'warn' ? 'text-amber-400' : 
-                  'text-slate-300'
-                }`}>
-                  {log.message}
-                </span>
-                {!!log.data && (
-                  <div className="text-slate-500 mt-0.5 pl-2 border-l border-slate-700/50 overflow-hidden text-ellipsis whitespace-nowrap group-hover:whitespace-normal">
-                    {typeof log.data === 'object' ? JSON.stringify(log.data) : String(log.data)}
-                  </div>
-                )}
-             </div>
-          </div>
+          <LogItem key={i} log={log} />
         ))}
       </div>
     </div>
   );
+}
+
+function LogItem({ log }: { log: LogEntry }) {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const hasData = !!log.data;
+    
+    // VS Code / Sublime Inspired Colors
+    const timeColor = 'text-[#858585]'; // Comment gray
+    
+    // Category Colors
+    const getCategoryColor = (cat: string) => {
+        switch(cat) {
+            case 'VOICE': return 'text-[#ce9178]'; // String/Orange
+            case 'AI': return 'text-[#569cd6]'; // Keyword/Blue
+            case 'APP': return 'text-[#4ec9b0]'; // Class/Teal
+            case 'SESSION': return 'text-[#c586c0]'; // Control/Purple
+            default: return 'text-[#d4d4d4]'; // Default text
+        }
+    };
+
+    const messageColor = log.level === 'error' ? 'text-[#f44747]' : // Red
+                         log.level === 'warn' ? 'text-[#cca700]' :  // Yellow
+                         'text-[#d4d4d4]'; // Default Light
+
+    return (
+        <div className="group hover:bg-[#2a2d2e] rounded-sm px-1 py-0.5 transition-colors">
+            <div 
+                className="flex items-start gap-2 cursor-pointer"
+                onClick={() => hasData && setIsExpanded(!isExpanded)}
+            >
+                {/* Timestamp */}
+                <span className={`${timeColor} shrink-0 w-14 select-none`}>
+                    {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+
+                {/* Expand Icon */}
+                <span className={`shrink-0 w-3 mt-0.5 ${hasData ? 'text-gray-500' : 'opacity-0'}`}>
+                    {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                </span>
+
+                {/* Category */}
+                <span className={`${getCategoryColor(log.category)} shrink-0 w-12 font-bold select-none`}>
+                    {log.category}
+                </span>
+
+                {/* Message */}
+                <div className={`flex-1 break-words ${messageColor}`}>
+                    {log.message}
+                </div>
+            </div>
+
+            {/* Data View - Subline/Expanded */}
+            {hasData && isExpanded && (
+                <div className="pl-[7.5rem] pr-2 py-1 overflow-x-auto">
+                    <pre className="text-[#9cdcfe] bg-[#1e1e1e] p-1 rounded border-l-2 border-[#404040] text-[9px] leading-relaxed whitespace-pre-wrap break-all">
+                        {typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data)}
+                    </pre>
+                </div>
+            )}
+        </div>
+    );
 }

@@ -191,8 +191,24 @@ class AetherLogger {
     };
   }
 
-  private format(entry: LogEntry) {
-    return `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}]: ${entry.message}`;
+  // Styles for browser console ("Automatic Car" feel)
+  private getBrowserStyles(level: LogLevel) {
+    const base = 'padding: 2px 4px; border-radius: 2px; font-weight: bold;';
+    switch (level) {
+      case 'info': return `${base} background: #3b82f6; color: white;`; // Blue
+      case 'warn': return `${base} background: #f59e0b; color: black;`; // Amber
+      case 'error': return `${base} background: #ef4444; color: white;`; // Red
+      case 'debug': return `${base} background: #6366f1; color: white;`; // Indigo
+      default: return `${base} background: #6b7280; color: white;`; // Gray
+    }
+  }
+
+  private formatTime(isoDate: string) {
+    try {
+      return isoDate.split('T')[1].split('.')[0]; // HH:mm:ss
+    } catch {
+      return isoDate;
+    }
   }
 
   public log(level: LogLevel, category: string, message: string, data?: unknown, stack?: string) {
@@ -200,9 +216,10 @@ class AetherLogger {
     if (!this.shouldLog(level)) return;
 
     const safeData = this.sanitize(data);
+    const timestamp = new Date().toISOString();
 
     const entry: LogEntry = {
-      timestamp: new Date().toISOString(),
+      timestamp,
       level,
       category,
       message,
@@ -211,16 +228,46 @@ class AetherLogger {
     };
 
     // Console Output
-    const formatted = this.format(entry);
-    const consoleArgs: unknown[] = [formatted];
-    if (data) consoleArgs.push(data);
-    if (stack) consoleArgs.push(`\n${stack}`);
+    if (typeof window !== 'undefined') {
+        // Browser Console (Styled)
+        const timeStr = this.formatTime(timestamp);
+        const style = this.getBrowserStyles(level);
+        const catStyle = 'color: #9ca3af; font-weight: bold;'; // Gray-400
+        
+        // Format: [Tag] HH:mm:ss Category Message
+        const consoleArgs: unknown[] = [
+            `%c${level.toUpperCase()}%c ${timeStr} %c[${category}]%c ${message}`,
+            style,
+            'color: #6b7280', // Time color
+            catStyle,
+            'color: inherit'  // Message color
+        ];
+        
+        if (data) consoleArgs.push(data);
+        if (stack) consoleArgs.push(stack);
 
-    switch (level) {
-      case 'info': console.info(...consoleArgs); break;
-      case 'warn': console.warn(...consoleArgs); break;
-      case 'error': console.error(...consoleArgs); break;
-      case 'debug': console.debug(...consoleArgs); break;
+        // Use the appropriate console method but spread our args
+        // Note: console.log supports %c format strings as the first arg
+        switch (level) {
+            case 'info': console.info(...consoleArgs); break;
+            case 'warn': console.warn(...consoleArgs); break;
+            case 'error': console.error(...consoleArgs); break;
+            case 'debug': console.debug(...consoleArgs); break;
+        }
+    } else {
+        // Server/Terminal Output (Simplified)
+        const timeStr = this.formatTime(timestamp);
+        const formatted = `[${timeStr}] [${level.toUpperCase()}] [${category}]: ${message}`;
+        const consoleArgs: unknown[] = [formatted];
+        if (data) consoleArgs.push(data);
+        if (stack) consoleArgs.push(`\n${stack}`);
+
+        switch (level) {
+            case 'info': console.info(...consoleArgs); break;
+            case 'warn': console.warn(...consoleArgs); break;
+            case 'error': console.error(...consoleArgs); break;
+            case 'debug': console.debug(...consoleArgs); break;
+        }
     }
 
     // In-memory storage (always store if it passed the filter)
