@@ -95,6 +95,19 @@ export const WaitlistModal = ({ isOpen, onJoin, onClose, onBypass }: WaitlistMod
               </p>
             </div>
 
+            {/* Unlock Option after Submission */}
+            {submitted && (
+                <button 
+                    onClick={() => {
+                        setSubmitted(false);
+                        setMode('access');
+                    }}
+                    className="text-emerald-300 hover:text-emerald-200 text-sm underline underline-offset-4 transition-colors"
+                >
+                    Have an access code? Unlock now
+                </button>
+            )}
+
             {/* Form */}
             {!submitted && (
               <form onSubmit={handleSubmit} className="w-full space-y-4">

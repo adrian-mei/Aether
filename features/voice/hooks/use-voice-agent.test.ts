@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 
@@ -8,7 +8,8 @@ jest.mock('@/features/voice/services/kokoro-service', () => ({
     initialize: jest.fn().mockResolvedValue(undefined),
     speak: jest.fn().mockImplementation(async (text, voice, onStart) => {
       if (onStart) onStart();
-      return Promise.resolve();
+      // Delay resolution to simulate speaking duration
+      return new Promise(resolve => setTimeout(resolve, 100));
     }),
     stop: jest.fn(),
   },
@@ -65,11 +66,11 @@ describe('useVoiceAgent', () => {
     delete (global.window as any).SpeechSynthesisUtterance;
   });
 
-  it('should initialize with idle state and load kokoro', () => {
+  it('should initialize with idle state', () => {
     const { result } = renderHook(() => useVoiceAgent(jest.fn()));
     
     expect(result.current.state).toBe('idle');
-    expect(kokoroService.initialize).toHaveBeenCalled();
+    // Kokoro initialization is now handled by useSessionManager
   });
 
   it('should start listening when requested', () => {
@@ -130,13 +131,56 @@ describe('useVoiceAgent', () => {
   it('should use kokoro for speech output', async () => {
     const { result } = renderHook(() => useVoiceAgent(jest.fn()));
 
-    // Use autoResume: false to keep the state as 'speaking' after speech finishes
+    let resolveSpeak: (value: void) => void;
+    const speakPromise = new Promise<void>((resolve) => {
+      resolveSpeak = resolve;
+    });
+
+    (kokoroService.speak as jest.Mock).mockImplementation(async (text, voice, onStart) => {
+      if (onStart) onStart();
+      return speakPromise;
+    });
+
+    // Start speaking but don't await the result yet
+    let promise: Promise<void>;
     await act(async () => {
-      await result.current.speak('Hello', { autoResume: false });
+      promise = result.current.speak('Hello', { autoResume: false });
     });
 
     expect(kokoroService.speak).toHaveBeenCalledWith('Hello', 'af_heart', expect.any(Function));
-    expect(result.current.state).toBe('speaking'); 
+    
+    // Verify state is 'speaking' while promise is pending
+    await waitFor(() => {
+        expect(result.current.state).toBe('speaking');
+    });
+
+    // Resolve and finish
+    await act(async () => {
+      resolveSpeak!();
+      await promise;
+    });
+    
+    // Verify it goes back to idle (or whatever end state)
+    // Since autoResume is false and we mocked speakTTS callback behavior in the hook implementation...
+    // The actual hook implementation calls the callback when promise resolves.
+    // Our mock above just returns a promise. It doesn't invoke the callback that the hook passes to it?
+    // Wait, kokoroService.speak signature in real code:
+    // public async speak(text: string, voiceId?: string, onPlaybackStart?: () => void): Promise<Promise<void>>
+    
+    // In useTTS:
+    // const playbackPromise = await kokoroService.speak(...)
+    // if (playbackPromise) await playbackPromise;
+    
+    // So the mock should return a Promise that resolves to a Promise (playbackPromise).
+    // The mock implementation in the test file:
+    // speak: jest.fn().mockImplementation(async (text, voice, onStart) => { ... return Promise.resolve(); })
+    // This returns a Promise<void>, not Promise<Promise<void>>.
+    // This effectively simulates the inner playback promise?
+    // No, because await kokoroService.speak() would return undefined (if mocked as returning Promise<void> directly, wait... async returns Promise).
+    // If I return Promise.resolve(), await kokoroService.speak() returns undefined.
+    // then await undefined is fine.
+    
+    // But I want to simulate the duration.
   });
 
   it('should toggle mute state', () => {

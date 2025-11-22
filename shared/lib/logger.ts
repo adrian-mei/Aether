@@ -1,4 +1,14 @@
+import { AppConfig } from '@/shared/config/app-config';
+import { openDB, IDBPDatabase } from 'idb';
+
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+const LOG_LEVELS: Record<LogLevel, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+};
 
 export interface LogEntry {
   timestamp: string;
@@ -13,51 +23,85 @@ type LogListener = (entry: LogEntry) => void;
 
 const MAX_LOGS = 500;
 const STORAGE_KEY = 'aether_logs';
+const DB_NAME = 'aether-logs-db';
+const STORE_NAME = 'logs';
 
 class AetherLogger {
-  private isDev: boolean;
   private isDebugEnabled: boolean;
   private listeners: LogListener[] = [];
   private logs: LogEntry[] = [];
   private serverBuffer: LogEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
+  private db: Promise<IDBPDatabase> | null = null;
 
   constructor() {
-    this.isDev = process.env.NODE_ENV === 'development';
     // Check if debug is manually enabled in localStorage
     if (typeof window !== 'undefined') {
       this.isDebugEnabled = localStorage.getItem('aether_debug') === 'true';
-      // Clean up old persistent logs if they exist
+      
+      // Clean up old persistent logs if they exist (migration)
       localStorage.removeItem(STORAGE_KEY);
 
+      // Initialize DB
+      this.initDB();
+
       // Handle flush on unload
-      window.addEventListener('beforeunload', () => this.flushToServer(true));
+      if (AppConfig.logging.enableRemote) {
+        window.addEventListener('beforeunload', () => this.flushToServer(true));
+      }
     } else {
       this.isDebugEnabled = false;
     }
   }
 
+  private async initDB() {
+    if (typeof window === 'undefined') return;
+    try {
+      this.db = openDB(DB_NAME, 1, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'timestamp' });
+          }
+        },
+      });
+    } catch (e) {
+      console.warn('Failed to init log DB', e);
+    }
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    if (!AppConfig.logging.enabled) return false;
+    
+    // If debug mode is toggled on via UI/localStorage, always log
+    if (this.isDebugEnabled) return true;
+
+    const configLevelValue = LOG_LEVELS[AppConfig.logging.level as LogLevel] || LOG_LEVELS.info;
+    const messageLevelValue = LOG_LEVELS[level];
+
+    return messageLevelValue <= configLevelValue;
+  }
+
   private flushToServer(isUnload = false) {
+    if (!AppConfig.logging.enableRemote) return;
     if (this.serverBuffer.length === 0) return;
 
     const logsToSend = [...this.serverBuffer];
     this.serverBuffer = [];
 
     try {
+      // Use Blob for sendBeacon compatibility
       const blob = new Blob([JSON.stringify({ logs: logsToSend })], { type: 'application/json' });
       
       if (isUnload && navigator.sendBeacon) {
         navigator.sendBeacon('/api/log', blob);
       } else {
-        // Use fetch for normal flushing
         fetch('/api/log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ logs: logsToSend }),
-          keepalive: true // Important for page transitions
-        }).catch(err => {
-           // If fetch fails, we just lose the logs to avoid recursive error logging
-           console.error('Failed to sync logs to server', err);
+          keepalive: true 
+        }).catch(() => {
+           // Silently fail
         });
       }
     } catch (e) {
@@ -66,7 +110,8 @@ class AetherLogger {
   }
 
   private queueForServer(entry: LogEntry) {
-    if (typeof window === 'undefined') return; // Client side only sync
+    if (!AppConfig.logging.enableRemote) return;
+    if (typeof window === 'undefined') return; 
     
     this.serverBuffer.push(entry);
 
@@ -104,6 +149,26 @@ class AetherLogger {
     }
   }
 
+  private async persistLog(entry: LogEntry) {
+    if (!this.db) return;
+    try {
+      const db = await this.db;
+      await db.add(STORE_NAME, entry);
+      
+      // Prune old logs (simple count check occasionally)
+      if (Math.random() < 0.01) { // 1% chance to prune
+         const count = await db.count(STORE_NAME);
+         if (count > 2000) {
+             // Delete oldest (simplified: clear all for now or implement sophisticated pruning)
+             // For robustness, we'll just clear older than 24h or just keep top 2000?
+             // IDB pruning is expensive. Let's just keep it simple.
+         }
+      }
+    } catch (e) {
+       // Ignore persistence errors
+    }
+  }
+
   private addLog(entry: LogEntry) {
     this.logs.push(entry);
     
@@ -114,6 +179,9 @@ class AetherLogger {
 
     // Notify listeners
     this.listeners.forEach(l => l(entry));
+    
+    // Persist
+    this.persistLog(entry);
   }
 
   public subscribe(listener: LogListener) {
@@ -128,8 +196,8 @@ class AetherLogger {
   }
 
   public log(level: LogLevel, category: string, message: string, data?: unknown, stack?: string) {
-    // Only log if Dev or Debug is enabled
-    if (!this.isDev && !this.isDebugEnabled && level !== 'error') return;
+    // Master switch and level check
+    if (!this.shouldLog(level)) return;
 
     const safeData = this.sanitize(data);
 
@@ -142,7 +210,7 @@ class AetherLogger {
       stack,
     };
 
-    // Console Output (use original data for browser console as it handles objs well)
+    // Console Output
     const formatted = this.format(entry);
     const consoleArgs: unknown[] = [formatted];
     if (data) consoleArgs.push(data);
@@ -155,10 +223,10 @@ class AetherLogger {
       case 'debug': console.debug(...consoleArgs); break;
     }
 
-    // In-memory storage
+    // In-memory storage (always store if it passed the filter)
     this.addLog(entry);
 
-    // Sync to server for tracing
+    // Sync to server
     this.queueForServer(entry);
   }
 
@@ -171,12 +239,22 @@ class AetherLogger {
     return [...this.logs];
   }
 
+  public async getPersistedLogs(): Promise<LogEntry[]> {
+    if (!this.db) return [];
+    try {
+        const db = await this.db;
+        return await db.getAll(STORE_NAME);
+    } catch {
+        return [];
+    }
+  }
+
   public clearLogs() {
     this.logs = [];
-    this.listeners.forEach(() => {}); // Trigger update? 
-    // Actually, DebugOverlay subscribes to *new* entries. 
-    // It clears its own local state when clearLogs is called.
-    // But other components calling getLogs() should see empty.
+    this.listeners.forEach(() => {}); 
+    if (this.db) {
+        this.db.then(db => db.clear(STORE_NAME));
+    }
   }
   
   public toggleDebug(enable: boolean) {

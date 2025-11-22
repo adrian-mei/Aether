@@ -1,17 +1,13 @@
 import { logger } from '@/shared/lib/logger';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
+import type { ITextToSpeechService, Voice as IVoice, AudioGenerationResult } from '../types/tts.types';
 
-export interface KokoroVoice {
+export interface KokoroVoice extends IVoice {
   id: string;
   name: string;
   language: 'en-US' | 'en-GB';
   gender: 'female' | 'male';
   traits?: string;
-}
-
-export interface AudioGenerationResult {
-  audio: Float32Array;
-  sampleRate: number;
 }
 
 export const KOKORO_VOICES: KokoroVoice[] = [
@@ -33,7 +29,7 @@ export const KOKORO_VOICES: KokoroVoice[] = [
   { id: 'bm_george', name: 'George', language: 'en-GB', gender: 'male', traits: 'Classic' },
 ];
 
-export class KokoroService {
+export class KokoroService implements ITextToSpeechService {
   private static instance: KokoroService;
   private worker: Worker | null = null;
   private modelId = "onnx-community/Kokoro-82M-v1.0-ONNX";
@@ -46,9 +42,11 @@ export class KokoroService {
   private generatePromise: { 
       resolve: (result?: AudioGenerationResult | Promise<void> | void) => void; 
       reject: (err: unknown) => void;
-      onStart?: () => void;
+      onStart?: (duration: number) => void;
       returnAudio?: boolean;
   } | null = null;
+  
+  private onProgressCallback: ((progress: number, text: string) => void) | null = null;
 
   private constructor() {}
 
@@ -73,6 +71,10 @@ export class KokoroService {
       logger.error('KOKORO', 'Worker error', err);
       this.handleError(err.message);
     };
+  }
+
+  public onProgress(callback: (progress: number, text: string) => void) {
+      this.onProgressCallback = callback;
   }
 
   public async initialize(): Promise<void> {
@@ -110,9 +112,17 @@ export class KokoroService {
 
   private handleWorkerMessage(event: MessageEvent) {
     if (!event.data) return;
-    const { type, voices, audio, sampleRate, error } = event.data;
+    const { type, voices, audio, sampleRate, error, data } = event.data;
 
-    if (type === 'ready') {
+    if (type === 'progress') {
+        if (this.onProgressCallback && data) {
+            // Transformers.js returns progress 0-100
+            // We might want to normalize or smooth it
+            const progress = data.progress || 0;
+            const fileName = data.file || 'model';
+            this.onProgressCallback(progress, `Downloading ${fileName}...`);
+        }
+    } else if (type === 'ready') {
         logger.info('KOKORO', 'Worker ready', { voicesCount: voices.length });
         this.isReady = true;
         this.isInitializing = false;
@@ -126,7 +136,8 @@ export class KokoroService {
         }
         this.initializationPromise = null; // Clear promise so it can be retried if needed (though usually redundant once ready)
     } else if (type === 'audio') {
-        logger.debug('KOKORO', 'Audio generation complete', { sampleRate, length: audio.length });
+        const duration = audio.length / sampleRate;
+        logger.debug('KOKORO', 'Audio generation complete', { sampleRate, length: audio.length, duration });
         if (this.generatePromise) {
             if (this.generatePromise.returnAudio) {
                 // Return the raw buffer instead of playing
@@ -135,7 +146,7 @@ export class KokoroService {
             } else {
                 // Play immediately (default behavior)
                 if (this.generatePromise.onStart) {
-                    this.generatePromise.onStart();
+                    this.generatePromise.onStart(duration);
                 }
                 // Hand off to audio player (which queues it) and resolve immediately
                 // so the next sentence can be generated in parallel.
@@ -180,7 +191,7 @@ export class KokoroService {
    * Generates and plays audio immediately.
    * Returns a promise that resolves to a Playback Promise (which resolves when audio finishes).
    */
-  public async speak(text: string, voiceId?: string, onPlaybackStart?: () => void): Promise<Promise<void>> {
+  public async speak(text: string, voiceId?: string, onPlaybackStart?: (duration: number) => void): Promise<Promise<void>> {
     try {
       if (!this.isReady) {
         await this.initialize();

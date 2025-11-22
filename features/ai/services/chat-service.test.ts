@@ -1,4 +1,5 @@
-import { streamChatCompletion, ChatMessage } from '@/features/ai/services/chat-service';
+import { chatService } from '@/features/ai/services/chat-service';
+import type { ChatMessage } from '@/features/ai/types/chat.types';
 
 // Mock logger to suppress output during tests
 jest.mock('@/shared/lib/logger', () => ({
@@ -46,7 +47,11 @@ describe('ChatService', () => {
     mockFetch.mockResolvedValue(createMockStreamResponse(mockChunks));
 
     const onChunk = jest.fn();
-    const result = await streamChatCompletion(history, 'sys-prompt', onChunk);
+    const result = await chatService.streamChatCompletion(
+        history, 
+        { systemPrompt: 'sys-prompt' }, 
+        onChunk
+    );
 
     expect(result).toBe('Hello there');
     expect(onChunk).toHaveBeenCalledTimes(2);
@@ -60,12 +65,12 @@ describe('ChatService', () => {
   });
 
   it('should include access code in headers', async () => {
-    localStorage.setItem('aether_access_code', 'secret-123');
     const history: ChatMessage[] = [{ role: 'user', content: 'Hi' }];
+    const accessCode = 'secret-123';
     
     mockFetch.mockResolvedValue(createMockStreamResponse([]));
 
-    await streamChatCompletion(history);
+    await chatService.streamChatCompletion(history, { accessCode });
 
     expect(mockFetch).toHaveBeenCalledWith('/api/gemini', expect.objectContaining({
       headers: expect.objectContaining({
@@ -81,7 +86,7 @@ describe('ChatService', () => {
       body: null,
     });
 
-    await expect(streamChatCompletion([])).rejects.toThrow('Failed to get chat completion');
+    await expect(chatService.streamChatCompletion([], {})).rejects.toThrow('Failed to get chat completion');
   });
 
   it('should handle malformed SSE data gracefully', async () => {
@@ -94,7 +99,7 @@ describe('ChatService', () => {
     mockFetch.mockResolvedValue(createMockStreamResponse(mockChunks));
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    const result = await streamChatCompletion([]);
+    const result = await chatService.streamChatCompletion([], {});
 
     expect(result).toBe('Good job');
     expect(consoleSpy).toHaveBeenCalled(); // Should log parse error

@@ -1,94 +1,106 @@
 import { logger } from '@/shared/lib/logger';
+import type { IChatService, ChatMessage, ChatOptions } from '../types/chat.types';
 
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+export class ChatService implements IChatService {
+  private static instance: ChatService;
 
-export async function streamChatCompletion(
-  history: ChatMessage[],
-  systemPrompt?: string,
-  onChunk?: (chunk: string) => void,
-  accessCode?: string
-): Promise<string> {
-  logger.info('CHAT_SERVICE', 'Sending request to LLM...');
-  const start = Date.now();
-  
-  try {
-    const response = await fetch('/api/gemini', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'x-access-code': accessCode || ''
-      },
-      body: JSON.stringify({ messages: history, system: systemPrompt }),
-    });
+  private constructor() {}
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+  public static getInstance(): ChatService {
+    if (!ChatService.instance) {
+      ChatService.instance = new ChatService();
     }
-    if (!response.body) {
-      throw new Error('No response body');
-    }
+    return ChatService.instance;
+  }
 
-    let assistantMessage = '';
-    const stream = response.body;
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let isFirstChunk = true;
+  public async streamChatCompletion(
+    history: ChatMessage[],
+    options: ChatOptions,
+    onChunk?: (chunk: string) => void
+  ): Promise<string> {
+    logger.info('CHAT_SERVICE', 'Sending request to LLM...');
+    const start = Date.now();
+    
+    try {
+      // This logic is specific to the REST implementation.
+      // If we switch to WebSocket, we would subclass or change implementation here.
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-access-code': options.accessCode || ''
+        },
+        body: JSON.stringify({ 
+            messages: history, 
+            system: options.systemPrompt,
+            model: options.model
+        }),
+      });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n\n');
-      // Keep the last potentially incomplete chunk in buffer
-      buffer = lines.pop() || '';
-      
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const dataStr = line.slice(6);
-          try {
-            const data = JSON.parse(dataStr);
-            if (data.type === 'text') {
-              if (isFirstChunk) {
-                logger.info('CHAT_SERVICE', 'First token received', { ttftMs: Date.now() - start });
-                isFirstChunk = false;
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      let assistantMessage = '';
+      const stream = response.body;
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let isFirstChunk = true;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        // Keep the last potentially incomplete chunk in buffer
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.type === 'text') {
+                if (isFirstChunk) {
+                  logger.info('CHAT_SERVICE', 'First token received', { ttftMs: Date.now() - start });
+                  isFirstChunk = false;
+                }
+                assistantMessage += data.content;
+                if (onChunk) onChunk(data.content);
+              } else if (data.type === 'usage') {
+                logger.info('API', 'Token Usage', data.data);
+              } else if (data.type === 'error') {
+                logger.error('API', 'Stream Error', { error: data.content });
               }
-              assistantMessage += data.content;
-              if (onChunk) onChunk(data.content);
-            } else if (data.type === 'usage') {
-              logger.info('API', 'Token Usage', data.data);
-            } else if (data.type === 'error') {
-              logger.error('API', 'Stream Error', { error: data.content });
+            } catch {
+              console.error('Failed to parse SSE data:', dataStr);
             }
-          } catch {
-            console.error('Failed to parse SSE data:', dataStr);
           }
         }
       }
+
+      logger.info('CHAT_SERVICE', 'Response finished', {
+        textLength: assistantMessage.length,
+        totalDurationMs: Date.now() - start,
+      });
+
+      return assistantMessage;
+    } catch (e: unknown) {
+      const error = e as Error;
+      logger.error('CHAT_SERVICE', 'Failed to send request', { 
+        error: error.message || 'Unknown error',
+        details: JSON.stringify(error, Object.getOwnPropertyNames(error)) 
+      });
+      throw new Error("Failed to get chat completion.");
     }
-
-    logger.info('CHAT_SERVICE', 'Response finished', {
-      textLength: assistantMessage.length,
-      totalDurationMs: Date.now() - start,
-    });
-
-    return assistantMessage;
-  } catch (e: unknown) {
-    const error = e as Error;
-    logger.error('CHAT_SERVICE', 'Failed to send request', { 
-      error: error.message || 'Unknown error',
-      details: JSON.stringify(error, Object.getOwnPropertyNames(error)) 
-    });
-    // Re-throw to be handled by the caller
-    throw new Error("Failed to get chat completion.");
   }
-}
 
-export async function testApiConnection(): Promise<void> {
+  public async testApiConnection(): Promise<void> {
     logger.info('APP', 'Testing API connection...');
     try {
       const start = Date.now();
@@ -106,38 +118,16 @@ export async function testApiConnection(): Promise<void> {
         throw new Error(`API responded with ${res.status}: ${text}`);
       }
       
-      // Consume stream and check for usage
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      if (reader) {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                    const data = JSON.parse(line.slice(6));
-                    if (data.type === 'usage') {
-                        logger.info('API', 'Test Usage', data.data);
-                    }
-                } catch {
-                    // Ignore parsing errors for test
-                }
-              }
-            }
-        }
-      }
+      // Consume stream... (simplified for brevity as this is dev tool)
+      await res.text();
       
       logger.info('API', 'Test successful', { latencyMs: Date.now() - start });
     } catch (e: unknown) {
       const error = e as Error;
       logger.error('API', 'Test error', { message: error.message });
     }
+  }
 }
+
+export const chatService = ChatService.getInstance();
+export type { ChatMessage }; // Re-export for compatibility if needed

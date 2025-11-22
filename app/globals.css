@@ -95,8 +95,8 @@ body::after {
 }
 
 @keyframes wave {
-  0%, 100% { height: 1.5rem; background-color: #fb923c; } /* Orange-400 */
-  50% { height: 3rem; background-color: #fb7185; } /* Rose-400 */
+  0%, 100% { transform: scaleY(1); background-color: #fb923c; } /* Orange-400 */
+  50% { transform: scaleY(2); background-color: #fb7185; } /* Rose-400 */
 }
 
 .animate-wave {
@@ -120,4 +120,129 @@ body::after {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255,255,255,0.2);
+}
+
+/* ========== AETHER UI ANIMATIONS ========== */
+
+@keyframes floatSmooth {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translate(30px, -40px) scale(1.05) rotate(90deg);
+  }
+  50% {
+    transform: translate(-20px, 30px) scale(0.95) rotate(180deg);
+  }
+  75% {
+    transform: translate(40px, 20px) scale(1.02) rotate(270deg);
+  }
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes ripple-delayed {
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulse-slower {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes orbit {
+  0% {
+    transform: rotate(0deg) translateX(140px) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(140px) rotate(-360deg);
+  }
+}
+
+@layer utilities {
+  .animate-breathe {
+    animation: breathe 4s ease-in-out infinite;
+  }
+  .animate-glow {
+    animation: glow 3s ease-in-out infinite;
+  }
+  .animate-ripple {
+    animation: ripple 2s ease-out infinite;
+  }
+  .animate-ripple-delayed {
+    animation: ripple-delayed 2s ease-out infinite 0.5s;
+  }
+  .animate-pulse-slow {
+    animation: pulse-slow 3s ease-in-out infinite;
+  }
+  .animate-pulse-slower {
+    animation: pulse-slower 4s ease-in-out infinite;
+  }
+  .animate-orbit {
+    animation: orbit 3s linear infinite;
+  }
+}
+
+.bg-gradient-radial {
+  background: radial-gradient(circle, var(--tw-gradient-stops));
 }
