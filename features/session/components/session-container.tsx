@@ -21,10 +21,7 @@ export function SessionContainer() {
         currentMessageDuration={state.currentMessageDuration}
         transcript={state.transcript}
         turnCount={state.turnCount}
-<<<<<<< Updated upstream
-=======
         tokenUsage={state.tokenUsage}
->>>>>>> Stashed changes
         isDebugMode={state.isDebugOpen}
         onStartSession={state.status === 'awaiting-boot' ? actions.startBootSequence : actions.handleStartSession}
         onToggleListening={actions.toggleListening}

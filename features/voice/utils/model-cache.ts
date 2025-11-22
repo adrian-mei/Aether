@@ -2,8 +2,6 @@ import { logger } from '@/shared/lib/logger';
 
 export type ModelCacheStatus = 'checking' | 'cached' | 'missing' | 'unsupported';
 
-const MODEL_CACHE_NAME = 'aether-models-v1';
-
 /**
  * Checks if the Kokoro model files are present in the browser cache.
  * Returns 'cached' if significant model files are found, 'missing' otherwise.

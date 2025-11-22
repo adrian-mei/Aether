@@ -32,10 +32,7 @@ interface AetherUIProps {
   currentMessageDuration?: number;
   transcript?: string;
   turnCount: number;
-<<<<<<< Updated upstream
-=======
   tokenUsage?: TokenUsage;
->>>>>>> Stashed changes
   isDebugMode: boolean;
   onStartSession: () => void;
   onToggleListening: () => void;
@@ -53,10 +50,7 @@ export const AetherUI = ({
   currentMessageDuration,
   transcript,
   turnCount,
-<<<<<<< Updated upstream
-=======
   tokenUsage,
->>>>>>> Stashed changes
   isDebugMode,
   onStartSession, 
   onToggleListening,
@@ -139,10 +133,7 @@ export const AetherUI = ({
               permissionStatus={permissionStatus}
               sessionStatus={sessionStatus}
               modelCacheStatus={modelCacheStatus}
-<<<<<<< Updated upstream
-=======
               tokenUsage={tokenUsage}
->>>>>>> Stashed changes
               onTestApi={() => chatService.testApiConnection()}
               onSimulateInput={onSimulateInput}
             />
