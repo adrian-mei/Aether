@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
+import { logger } from '@/shared/lib/logger';
 
 interface UseMessageQueueProps {
   onSpeak: (text: string, options: { autoResume?: boolean }) => Promise<void>;
@@ -18,6 +19,7 @@ export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
         if (!isStreamActiveRef.current && bufferRef.current.trim()) {
              // Flush remainder
              const text = bufferRef.current.trim();
+             logger.debug('QUEUE', 'Flushing buffer remainder', { text });
              bufferRef.current = '';
              isSpeakingRef.current = true;
              await onSpeak(text, { autoResume: true });
@@ -32,6 +34,7 @@ export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
     // Determine if this is the absolute last chunk
     const isLast = !isStreamActiveRef.current && queueRef.current.length === 0 && !bufferRef.current.trim();
     
+    logger.debug('QUEUE', 'Processing sentence', { text, isLast });
     await onSpeak(text, { autoResume: isLast });
     
     isSpeakingRef.current = false;
@@ -56,6 +59,7 @@ export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
         const sentence = parts[i] + (parts[i+1] || '');
         if (sentence.trim()) {
             queueRef.current.push(sentence.trim());
+            logger.debug('QUEUE', 'Sentence detected and queued', { sentence: sentence.trim() });
         }
     }
     

@@ -50,10 +50,8 @@ export class EmbeddingService {
 
       try {
         if (!this.worker) {
-          this.worker = new Worker(
-            new URL('../workers/embedding.worker.ts', import.meta.url),
-            { type: 'module' }
-          );
+          // Use static worker from /public to avoid Turbopack bundling issues with transformers.js
+          this.worker = new Worker('/embedding.worker.js', { type: 'module' });
 
           this.worker.onmessage = this.handleWorkerMessage.bind(this);
           this.worker.onerror = (err) => {
@@ -91,6 +89,15 @@ export class EmbeddingService {
         this.initPromise = null;
       }
       this.initializationPromise = null;
+    } else if (type === 'log') {
+      // Forward worker logs to main logger
+      const { level, message } = event.data as { level: 'info' | 'warn' | 'error' | 'debug'; message: string };
+      switch (level) {
+        case 'info': logger.info('EMBEDDING', message); break;
+        case 'warn': logger.warn('EMBEDDING', message); break;
+        case 'error': logger.error('EMBEDDING', message); break;
+        case 'debug': logger.debug('EMBEDDING', message); break;
+      }
     } else if (type === 'embedding') {
       const { data } = event.data as { data: Float32Array };
 

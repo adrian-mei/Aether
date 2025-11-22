@@ -28,6 +28,7 @@ export function SessionContainer() {
           isOpen={state.isDebugOpen} 
           onClose={actions.toggleDebug} 
           onTestApi={testApiConnection}
+          onSimulateInput={actions.handleInputComplete}
         />
 
         {/* Debug Toggle - Bottom Right Corner */}

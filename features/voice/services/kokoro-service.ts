@@ -126,6 +126,7 @@ export class KokoroService {
         }
         this.initializationPromise = null; // Clear promise so it can be retried if needed (though usually redundant once ready)
     } else if (type === 'audio') {
+        logger.debug('KOKORO', 'Audio generation complete', { sampleRate, length: audio.length });
         if (this.generatePromise) {
             if (this.generatePromise.returnAudio) {
                 // Return the raw buffer instead of playing
@@ -236,7 +237,10 @@ export class KokoroService {
   }
 
   private async playAudio(audioData: Float32Array, sampleRate: number): Promise<void> {
-    return audioPlayer.play(audioData, sampleRate);
+    logger.info('KOKORO', 'Queueing audio for playback', { sampleRate });
+    return audioPlayer.play(audioData, sampleRate).then(() => {
+        logger.info('KOKORO', 'Playback finished');
+    });
   }
 
   /**

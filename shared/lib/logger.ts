@@ -19,6 +19,8 @@ class AetherLogger {
   private isDebugEnabled: boolean;
   private listeners: LogListener[] = [];
   private logs: LogEntry[] = [];
+  private serverBuffer: LogEntry[] = [];
+  private flushTimer: NodeJS.Timeout | null = null;
 
   constructor() {
     this.isDev = process.env.NODE_ENV === 'development';
@@ -27,8 +29,59 @@ class AetherLogger {
       this.isDebugEnabled = localStorage.getItem('aether_debug') === 'true';
       // Clean up old persistent logs if they exist
       localStorage.removeItem(STORAGE_KEY);
+
+      // Handle flush on unload
+      window.addEventListener('beforeunload', () => this.flushToServer(true));
     } else {
       this.isDebugEnabled = false;
+    }
+  }
+
+  private flushToServer(isUnload = false) {
+    if (this.serverBuffer.length === 0) return;
+
+    const logsToSend = [...this.serverBuffer];
+    this.serverBuffer = [];
+
+    try {
+      const blob = new Blob([JSON.stringify({ logs: logsToSend })], { type: 'application/json' });
+      
+      if (isUnload && navigator.sendBeacon) {
+        navigator.sendBeacon('/api/log', blob);
+      } else {
+        // Use fetch for normal flushing
+        fetch('/api/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ logs: logsToSend }),
+          keepalive: true // Important for page transitions
+        }).catch(err => {
+           // If fetch fails, we just lose the logs to avoid recursive error logging
+           console.error('Failed to sync logs to server', err);
+        });
+      }
+    } catch (e) {
+      console.error('Error flushing logs', e);
+    }
+  }
+
+  private queueForServer(entry: LogEntry) {
+    if (typeof window === 'undefined') return; // Client side only sync
+    
+    this.serverBuffer.push(entry);
+
+    if (!this.flushTimer) {
+        this.flushTimer = setTimeout(() => {
+            this.flushToServer();
+            this.flushTimer = null;
+        }, 1000); // Flush every 1 second max
+    }
+
+    if (this.serverBuffer.length > 50) {
+        // Force flush if buffer gets too big
+        if (this.flushTimer) clearTimeout(this.flushTimer);
+        this.flushToServer();
+        this.flushTimer = null;
     }
   }
 
@@ -104,6 +157,9 @@ class AetherLogger {
 
     // In-memory storage
     this.addLog(entry);
+
+    // Sync to server for tracing
+    this.queueForServer(entry);
   }
 
   public info(category: string, message: string, data?: unknown) { this.log('info', category, message, data); }

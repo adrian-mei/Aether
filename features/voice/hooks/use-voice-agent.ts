@@ -70,12 +70,16 @@ export function useVoiceAgent(
 
   // Refs for silence detection
   const silenceTimer = useRef<NodeJS.Timeout | null>(null);
+  const watchdogTimer = useRef<NodeJS.Timeout | null>(null);
   const transcriptRef = useRef<string>('');
   
   // Retry mechanism to extend listening window
   const retryCount = useRef(0);
   const MAX_RETRIES = 2;
-  const SILENCE_TIMEOUT_MS = 2000; // Wait 2s of silence before sending
+  // Reduced from 2000ms to 1000ms to make conversation snappier
+  const SILENCE_TIMEOUT_MS = 1000; 
+  // Safety timeout: If no speech detected for 8s, assume silence/issue and stop
+  const WATCHDOG_TIMEOUT_MS = 8000;
 
   // Cleanup audio on page refresh/unload
   useEffect(() => {
@@ -102,27 +106,38 @@ export function useVoiceAgent(
         logger.info('VOICE', 'SpeechRecognition started');
         setState('listening');
         transcriptRef.current = '';
+
+        // Start watchdog
+        if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
+        watchdogTimer.current = setTimeout(() => {
+            logger.warn('VOICE', 'Watchdog timeout (no speech detected)', { timeoutMs: WATCHDOG_TIMEOUT_MS });
+            rec.stop();
+            // We treat this as silence/no-input
+            if (onSilence) onSilence();
+        }, WATCHDOG_TIMEOUT_MS);
       };
       
       rec.onresult = (event: SpeechRecognitionEvent) => {
         retryCount.current = 0;
         
-        // Clear existing timer on new input
+        // Clear timers on new input
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
 
         // Reconstruct full transcript from results
-        // Using Array.from on array-like object
         const currentTranscript = Array.from({ length: event.results.length }, (_, i) => event.results[i])
           .map((result) => result[0].transcript)
           .join('');
         
         transcriptRef.current = currentTranscript;
+        logger.debug('VOICE', 'Partial speech result', { transcript: currentTranscript });
 
         // Set new timer
         silenceTimer.current = setTimeout(() => {
           if (transcriptRef.current.trim()) {
-            logger.info('VOICE', 'Silence detected, processing input', { 
-              transcript: transcriptRef.current 
+            logger.info('VOICE', 'Silence detected (end of turn)', { 
+              transcript: transcriptRef.current,
+              timeoutMs: SILENCE_TIMEOUT_MS
             });
             rec.stop(); // Stop listening
             setState('processing');
@@ -155,12 +170,13 @@ export function useVoiceAgent(
       };
 
       rec.onend = () => {
-        logger.info('VOICE', 'SpeechRecognition ended');
+        logger.info('VOICE', 'SpeechRecognition session ended');
         if (silenceTimer.current) clearTimeout(silenceTimer.current);
+        if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
 
         // Check if we should restart to extend the listening window
         if (retryCount.current > 0 && retryCount.current <= MAX_RETRIES) {
-            logger.info('VOICE', 'Restarting listening to extend window', { retry: retryCount.current });
+            logger.info('VOICE', 'Restarting listening (retry strategy)', { retry: retryCount.current });
             try {
                 rec.start();
             } catch (e) {
@@ -207,6 +223,7 @@ export function useVoiceAgent(
   const stopListening = useCallback(() => {
     logger.info('VOICE', 'Stopping listening');
     if (silenceTimer.current) clearTimeout(silenceTimer.current);
+    if (watchdogTimer.current) clearTimeout(watchdogTimer.current);
     retryCount.current = 0; // Prevent auto-restart
     recognitionRef.current?.stop();
     if (synth?.speaking) {

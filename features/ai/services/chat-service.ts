@@ -8,22 +8,18 @@ export interface ChatMessage {
 export async function streamChatCompletion(
   history: ChatMessage[],
   systemPrompt?: string,
-  onChunk?: (chunk: string) => void
+  onChunk?: (chunk: string) => void,
+  accessCode?: string
 ): Promise<string> {
   logger.info('CHAT_SERVICE', 'Sending request to LLM...');
   const start = Date.now();
   
   try {
-    // Safe access to localStorage
-    const accessCode = typeof window !== 'undefined' 
-      ? localStorage.getItem('aether_access_code') || '' 
-      : '';
-    
     const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'x-access-code': accessCode
+        'x-access-code': accessCode || ''
       },
       body: JSON.stringify({ messages: history, system: systemPrompt }),
     });
@@ -40,6 +36,7 @@ export async function streamChatCompletion(
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let isFirstChunk = true;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -56,6 +53,10 @@ export async function streamChatCompletion(
           try {
             const data = JSON.parse(dataStr);
             if (data.type === 'text') {
+              if (isFirstChunk) {
+                logger.info('CHAT_SERVICE', 'First token received', { ttftMs: Date.now() - start });
+                isFirstChunk = false;
+              }
               assistantMessage += data.content;
               if (onChunk) onChunk(data.content);
             } else if (data.type === 'usage') {
