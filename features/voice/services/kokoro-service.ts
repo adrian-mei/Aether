@@ -120,6 +120,14 @@ export class KokoroService implements ITextToSpeechService {
             // We might want to normalize or smooth it
             const progress = data.progress || 0;
             const fileName = data.file || 'model';
+            
+            // Log start of download for debugging
+            if (data.status === 'initiate') {
+                logger.info('KOKORO', `Starting download: ${fileName}`, { file: fileName });
+            } else if (progress === 100) {
+                logger.debug('KOKORO', `Download complete: ${fileName}`);
+            }
+
             this.onProgressCallback(progress, `Downloading ${fileName}...`);
         }
     } else if (type === 'ready') {

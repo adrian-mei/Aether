@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { logger } from '@/shared/lib/logger';
 import { chatService } from '@/features/ai/services/chat-service';
-import type { ChatMessage } from '@/features/ai/types/chat.types';
+import type { ChatMessage, TokenUsage } from '@/features/ai/types/chat.types';
 import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
 import { memoryService } from '@/features/memory/services/memory-service';
 import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
@@ -24,7 +24,11 @@ export function useConversation({
 }: UseConversationProps) {
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
   const [currentMessageDuration, setCurrentMessageDuration] = useState<number>(0);
+<<<<<<< Updated upstream
   const [turnCount, setTurnCount] = useState<number>(0);
+=======
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage>({ promptTokens: 0, completionTokens: 0, totalTokens: 0 });
+>>>>>>> Stashed changes
   
   const historyRef = useRef<ChatMessage[]>([]);
   const isProcessingRef = useRef(false);
@@ -106,6 +110,16 @@ export function useConversation({
           (chunk) => {
             lastActivityRef.current = Date.now();
             handleChunk(chunk);
+          },
+          (usage) => {
+              setTokenUsage(prev => ({
+                  promptTokens: prev.promptTokens + usage.promptTokens,
+                  completionTokens: prev.completionTokens + usage.completionTokens,
+                  totalTokens: prev.totalTokens + usage.totalTokens,
+                  // Keep the latest cost/model for reference, or accumulate cost if parsed
+                  cost: `$${(parseFloat(prev.cost?.replace('$', '') || '0') + parseFloat(usage.cost?.replace('$', '') || '0')).toFixed(5)}`,
+                  model: usage.model
+              }));
           }
       );
       
@@ -215,7 +229,14 @@ export function useConversation({
     state: {
       currentAssistantMessage,
       currentMessageDuration,
+<<<<<<< Updated upstream
       turnCount
+=======
+      isProcessing: isProcessingRef.current,
+      lastActivity: lastActivityRef.current,
+      turnCount: Math.floor(historyRef.current.length / 2),
+      tokenUsage
+>>>>>>> Stashed changes
     },
     actions: {
       getLastActivity: () => lastActivityRef.current,

@@ -94,11 +94,27 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
           if (virtualProgress >= 100 && isServicesReadyRef.current) {
               clearInterval(interval);
               
+<<<<<<< Updated upstream
               // Re-check cache status now that download should be complete
               checkModelCache().then(status => {
                   setModelCacheStatus(status);
                   logger.info('SESSION', 'Final model cache status', { status });
               });
+=======
+              // Poll for cache status (SW might lag behind download)
+              let attempts = 0;
+              const maxAttempts = 10;
+              const cacheInterval = setInterval(async () => {
+                  attempts++;
+                  const status = await checkModelCache();
+                  setModelCacheStatus(status);
+                  
+                  if (status === 'cached' || attempts >= maxAttempts) {
+                      clearInterval(cacheInterval);
+                      logger.info('SESSION', 'Final model cache status', { status, attempts });
+                  }
+              }, 1000);
+>>>>>>> Stashed changes
 
               // 5. Auto-Start Session
               try {

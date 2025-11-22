@@ -173,8 +173,16 @@ export function useSessionManager() {
   };
 
   useEffect(() => {
-    const debug = localStorage.getItem('aether_debug') === 'true';
-    setTimeout(() => setIsDebugOpen(debug), 0);
+    // Force enable debug mode by default for analysis if not set
+    let debugStr = localStorage.getItem('aether_debug');
+    if (debugStr === null) {
+        debugStr = 'true';
+        localStorage.setItem('aether_debug', 'true');
+    }
+    
+    const isEnabled = debugStr === 'true';
+    logger.toggleDebug(isEnabled); // Ensure logger is synced
+    setTimeout(() => setIsDebugOpen(isEnabled), 0);
   }, []);
 
   return {
@@ -189,6 +197,7 @@ export function useSessionManager() {
       downloadProgress: boot.state.downloadProgress,
       transcript,
       turnCount: conversation.state.turnCount,
+      tokenUsage: conversation.state.tokenUsage,
     },
     actions: {
       startBootSequence: boot.actions.startBootSequence,

@@ -60,15 +60,15 @@ export const WaitlistModal = ({ isOpen, onJoin, onClose, onBypass }: WaitlistMod
           {/* Close Button */}
           <button 
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 rounded-full hover:bg-emerald-900/50 text-emerald-400/50 hover:text-emerald-300 transition-colors z-20"
+            className="absolute top-4 right-4 p-2 rounded-full hover:bg-emerald-900/50 text-emerald-400/50 hover:text-emerald-300 transition-colors z-50"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
 
           {/* Ambient Glow */}
-          <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl" />
-          <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/20 rounded-full blur-3xl" />
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-teal-500/20 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col items-center text-center space-y-6">
             {/* Icon */}

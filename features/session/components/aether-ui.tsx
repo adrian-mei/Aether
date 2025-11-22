@@ -5,6 +5,7 @@ import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
+import type { TokenUsage } from '@/features/ai/types/chat.types';
 import { WaitlistModal } from './waitlist-modal';
 import { chatService } from '@/features/ai/services/chat-service';
 
@@ -31,6 +32,10 @@ interface AetherUIProps {
   currentMessageDuration?: number;
   transcript?: string;
   turnCount: number;
+<<<<<<< Updated upstream
+=======
+  tokenUsage?: TokenUsage;
+>>>>>>> Stashed changes
   isDebugMode: boolean;
   onStartSession: () => void;
   onToggleListening: () => void;
@@ -48,6 +53,10 @@ export const AetherUI = ({
   currentMessageDuration,
   transcript,
   turnCount,
+<<<<<<< Updated upstream
+=======
+  tokenUsage,
+>>>>>>> Stashed changes
   isDebugMode,
   onStartSession, 
   onToggleListening,
@@ -130,6 +139,10 @@ export const AetherUI = ({
               permissionStatus={permissionStatus}
               sessionStatus={sessionStatus}
               modelCacheStatus={modelCacheStatus}
+<<<<<<< Updated upstream
+=======
+              tokenUsage={tokenUsage}
+>>>>>>> Stashed changes
               onTestApi={() => chatService.testApiConnection()}
               onSimulateInput={onSimulateInput}
             />

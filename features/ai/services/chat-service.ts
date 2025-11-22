@@ -1,5 +1,5 @@
 import { logger } from '@/shared/lib/logger';
-import type { IChatService, ChatMessage, ChatOptions } from '../types/chat.types';
+import type { IChatService, ChatMessage, ChatOptions, TokenUsage } from '../types/chat.types';
 
 export class ChatService implements IChatService {
   private static instance: ChatService;
@@ -16,7 +16,8 @@ export class ChatService implements IChatService {
   public async streamChatCompletion(
     history: ChatMessage[],
     options: ChatOptions,
-    onChunk?: (chunk: string) => void
+    onChunk?: (chunk: string) => void,
+    onUsage?: (usage: TokenUsage) => void
   ): Promise<string> {
     logger.info('CHAT_SERVICE', 'Sending request to LLM...');
     const start = Date.now();
@@ -73,7 +74,20 @@ export class ChatService implements IChatService {
                 assistantMessage += data.content;
                 if (onChunk) onChunk(data.content);
               } else if (data.type === 'usage') {
-                logger.info('API', 'Token Usage', data.data);
+                const usage = data.data;
+                const tokens = usage.tokens || {};
+                const msg = `In: ${tokens.prompt || 0} | Out: ${tokens.completion || 0} | Cost: ${usage.cost || '$0.00'}`;
+                logger.info('API', `Token Usage [${msg}]`, data.data);
+                
+                if (onUsage && data.data && data.data.tokens) {
+                    onUsage({
+                        promptTokens: data.data.tokens.prompt,
+                        completionTokens: data.data.tokens.completion,
+                        totalTokens: data.data.tokens.total,
+                        cost: data.data.cost,
+                        model: data.data.model
+                    });
+                }
               } else if (data.type === 'error') {
                 logger.error('API', 'Stream Error', { error: data.content });
               }

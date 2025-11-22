@@ -5,12 +5,20 @@ import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
+<<<<<<< Updated upstream
+=======
+import type { TokenUsage } from '@/features/ai/types/chat.types';
+>>>>>>> Stashed changes
 
 interface DebugPanelLeftProps {
   voiceState: VoiceAgentState;
   permissionStatus: PermissionStatus;
   sessionStatus: SessionStatus;
   modelCacheStatus: ModelCacheStatus;
+<<<<<<< Updated upstream
+=======
+  tokenUsage?: TokenUsage;
+>>>>>>> Stashed changes
   onTestApi: () => void;
   onSimulateInput: (text: string) => void;
 }
@@ -20,6 +28,10 @@ export function DebugPanelLeft({
   permissionStatus,
   sessionStatus,
   modelCacheStatus,
+<<<<<<< Updated upstream
+=======
+  tokenUsage,
+>>>>>>> Stashed changes
   onTestApi,
   onSimulateInput
 }: DebugPanelLeftProps) {
@@ -62,7 +74,11 @@ export function DebugPanelLeft({
               <Activity size={12} />
               <span>Session Status</span>
             </div>
+<<<<<<< Updated upstream
             <div className="font-mono text-xs text-indigo-300 break-words">
+=======
+            <div className="font-mono text-xs text-green-400 break-words">
+>>>>>>> Stashed changes
               {sessionStatus}
             </div>
           </div>
@@ -105,6 +121,33 @@ export function DebugPanelLeft({
               {modelCacheStatus}
             </div>
           </div>
+<<<<<<< Updated upstream
+=======
+
+          {/* Token Usage */}
+          {tokenUsage && (
+            <div className="bg-black/20 rounded p-2 space-y-1">
+              <h5 className="text-[9px] font-bold text-slate-500 uppercase">Token Usage</h5>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono">
+                <span className="text-slate-400">Input:</span>
+                <span className="text-slate-300 text-right">{tokenUsage.promptTokens}</span>
+                
+                <span className="text-slate-400">Output:</span>
+                <span className="text-slate-300 text-right">{tokenUsage.completionTokens}</span>
+                
+                <span className="text-slate-400">Total:</span>
+                <span className="text-indigo-300 text-right">{tokenUsage.totalTokens}</span>
+                
+                {tokenUsage.cost && (
+                  <>
+                    <span className="text-slate-400">Cost:</span>
+                    <span className="text-green-400 text-right">{tokenUsage.cost}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+>>>>>>> Stashed changes
         </div>
       </div>
     </div>
