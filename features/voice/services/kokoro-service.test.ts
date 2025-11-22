@@ -22,7 +22,7 @@ jest.mock('@/shared/lib/logger', () => ({
 describe('KokoroService', () => {
   let service: KokoroService;
   let mockWorker: Worker;
-  let workerHandlers: {
+  const workerHandlers: {
     onmessage: ((event: MessageEvent) => void) | null;
     onerror: ((event: ErrorEvent) => void) | null;
   } = { onmessage: null, onerror: null };

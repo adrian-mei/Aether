@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/shared/lib/logger';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 

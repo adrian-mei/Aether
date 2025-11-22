@@ -21,39 +21,49 @@ export interface SessionAccessActions {
 }
 
 export function useSessionAccess() {
+  // Initialize with default values to avoid hydration mismatch (server vs client)
   const [interactionCount, setInteractionCount] = useState(0);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [accessCode, setAccessCode] = useState<string>('');
   const [isLimitReached, setIsLimitReached] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [accessCode, setAccessCode] = useState<string>('');
 
-  // Load rate limit state with reset logic
+  // Load state from localStorage after mount
   useEffect(() => {
-    const storedCount = localStorage.getItem('aether_interaction_count');
-    const storedTimestamp = localStorage.getItem('aether_limit_timestamp');
-    
-    if (storedTimestamp) {
-      const timestamp = parseInt(storedTimestamp, 10);
-      const now = Date.now();
+    try {
+      const storedTimestamp = localStorage.getItem('aether_limit_timestamp');
+      let currentCount = 0;
       
-      if (now - timestamp > RESET_WINDOW_MS) {
-        // Reset window has passed
-        setInteractionCount(0);
-        localStorage.setItem('aether_interaction_count', '0');
-        localStorage.removeItem('aether_limit_timestamp'); 
-        setIsReady(true);
-        return;
+      if (storedTimestamp) {
+        const timestamp = parseInt(storedTimestamp, 10);
+        const now = Date.now();
+        // If window expired, reset
+        if (now - timestamp > RESET_WINDOW_MS) {
+          localStorage.setItem('aether_interaction_count', '0');
+          localStorage.removeItem('aether_limit_timestamp');
+        } else {
+          // Valid window, read count
+          const storedCount = localStorage.getItem('aether_interaction_count');
+          currentCount = storedCount ? parseInt(storedCount, 10) : 0;
+        }
+      } else {
+        // No timestamp, read count (likely 0)
+        const storedCount = localStorage.getItem('aether_interaction_count');
+        currentCount = storedCount ? parseInt(storedCount, 10) : 0;
       }
-    }
 
-    if (storedCount) {
-      const count = parseInt(storedCount, 10);
-      setInteractionCount(count);
-      if (count >= MAX_INTERACTIONS) {
+      setInteractionCount(currentCount);
+      
+      // Check limit
+      if (currentCount >= MAX_INTERACTIONS) {
         setIsLimitReached(true);
       }
+    } catch (e) {
+      logger.error('SESSION', 'Failed to read session access state from local storage', e);
+    } finally {
+      setIsReady(true);
     }
-    setIsReady(true);
   }, []);
 
   const checkLimits = () => {

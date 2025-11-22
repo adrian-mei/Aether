@@ -26,8 +26,8 @@ export const useWakeLock = () => {
           setIsActive(false);
           logger.debug('WAKE_LOCK', 'Screen Wake Lock released');
         });
-      } catch (err: any) {
-        if (err.name === 'NotAllowedError') {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'NotAllowedError') {
             logger.warn('WAKE_LOCK', 'Wake Lock denied (possibly due to visibility/focus)');
         } else {
             logger.error('WAKE_LOCK', 'Failed to request Wake Lock', err);

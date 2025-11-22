@@ -16,6 +16,7 @@ interface UseConversationProps {
 
 export function useConversation({
   accessCode,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interactionCount,
   onSpeak,
   onSessionEnd,
@@ -23,6 +24,7 @@ export function useConversation({
 }: UseConversationProps) {
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
   const [currentMessageDuration, setCurrentMessageDuration] = useState<number>(0);
+  const [turnCount, setTurnCount] = useState<number>(0);
   
   const historyRef = useRef<ChatMessage[]>([]);
   const isProcessingRef = useRef(false);
@@ -61,6 +63,7 @@ export function useConversation({
     const userMessage: ChatMessage = { role: 'user', content: text };
     const newHistory = [...historyRef.current, userMessage];
     historyRef.current = newHistory;
+    setTurnCount(Math.floor(newHistory.length / 2));
 
     // Retrieve relevant memories (async, non-blocking with timeout)
     const memoryPromise = memoryService.queryRelevant(text, { limit: 5 }).catch((err) => {
@@ -68,12 +71,13 @@ export function useConversation({
         return [];
     });
     
-    const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => {
-        logger.warn('SESSION', 'Memory retrieval timed out after 5000ms, skipping');
+    const timeoutPromise = new Promise<unknown[]>((resolve) => setTimeout(() => {
+        logger.warn('SESSION', 'Memory retrieval timed out after 10000ms, skipping');
         resolve([]);
-    }, 5000));
+    }, 10000));
     
-    const relevantMemories = await Promise.race([memoryPromise, timeoutPromise]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const relevantMemories = await Promise.race([memoryPromise, timeoutPromise]) as any[];
     
     if (relevantMemories.length > 0) {
         logger.debug('SESSION', 'Retrieved memories', { count: relevantMemories.length });
@@ -109,6 +113,7 @@ export function useConversation({
       isProcessingRef.current = false;
 
       historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
+      setTurnCount(Math.floor(historyRef.current.length / 2));
 
       // Extract and store memories (non-blocking)
       memoryService.extractAndStore({
@@ -131,7 +136,7 @@ export function useConversation({
       const errorMsg = "I'm having trouble connecting. Please try again.";
       onSpeak(errorMsg);
     }
-  }, [handleChunk, startStream, endStream, interactionCount, accessCode, onSpeak, onSessionEnd]);
+  }, [handleChunk, startStream, endStream, accessCode, onSpeak, onSessionEnd]);
 
   const handleSilence = useCallback(async () => {
     if (isProcessingRef.current || !isSessionActive) return;
@@ -146,6 +151,7 @@ export function useConversation({
     
     const newHistory = [...historyRef.current, silenceMessage];
     historyRef.current = newHistory;
+    setTurnCount(Math.floor(newHistory.length / 2));
 
     // Retrieve relevant memories for personalized re-engagement
     const relevantMemories = await memoryService.queryRelevant(
@@ -176,6 +182,7 @@ export function useConversation({
       isProcessingRef.current = false;
 
       historyRef.current = [...newHistory, { role: 'assistant', content: assistantMessageText }];
+      setTurnCount(Math.floor(historyRef.current.length / 2));
     } catch (error) {
         logger.error('SESSION', 'Failed to handle silence', error);
         isProcessingRef.current = false;
@@ -189,6 +196,7 @@ export function useConversation({
 
   const resetConversation = useCallback(() => {
       historyRef.current = [];
+      setTurnCount(0);
       setCurrentAssistantMessage('');
       isProcessingRef.current = false;
       lastActivityRef.current = 0;
@@ -197,6 +205,7 @@ export function useConversation({
   const injectAssistantMessage = useCallback((text: string) => {
     const message: ChatMessage = { role: 'assistant', content: text };
     historyRef.current = [...historyRef.current, message];
+    setTurnCount(Math.floor(historyRef.current.length / 2));
     setCurrentAssistantMessage(text);
     // Note: injectAssistantMessage doesn't have audio duration context, 
     // so default to 0 or let speak() handle it via onStart if used with speak().
@@ -206,11 +215,10 @@ export function useConversation({
     state: {
       currentAssistantMessage,
       currentMessageDuration,
-      isProcessing: isProcessingRef.current,
-      lastActivity: lastActivityRef.current,
-      turnCount: Math.floor(historyRef.current.length / 2)
+      turnCount
     },
     actions: {
+      getLastActivity: () => lastActivityRef.current,
       handleInputComplete,
       handleSilence,
       resetConversation,

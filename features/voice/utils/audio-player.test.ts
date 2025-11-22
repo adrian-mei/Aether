@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AudioPlayer } from '@/features/voice/utils/audio-player';
 import { waitFor } from '@testing-library/react';
 
@@ -101,7 +102,7 @@ describe('AudioPlayer', () => {
     const audio2 = new Float32Array([2]);
 
     player.play(audio1, 24000); // Starts
-    const promise2 = player.play(audio2, 24000); // Queues
+    player.play(audio2, 24000); // Queues, ignore promise
 
     // Wait for start
     await waitFor(() => {

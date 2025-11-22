@@ -7,6 +7,11 @@ type WorkerMessage =
   | { type: 'generate'; text: string; voice: string }
   | { type: 'warm' };
 
+interface ProgressData {
+  status: string;
+  [key: string]: unknown;
+}
+
 const ctx: Worker = self as unknown as Worker;
 let tts: KokoroTTS | null = null;
 
@@ -28,7 +33,7 @@ ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       env.wasm.proxy = true; // Enable multithreading for WASM fallback
       // env.webgpu.powerPreference = "high-performance"; // Types might not exist yet in all versions
 
-      const progressCallback = (data: any) => {
+      const progressCallback = (data: ProgressData) => {
         if (data.status === 'progress') {
           ctx.postMessage({ type: 'progress', data });
         }
@@ -41,7 +46,8 @@ ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           dtype: "fp32",
           device: "webgpu",
           progress_callback: progressCallback,
-        } as any); // Type assertion to bypass strict KokoroTTS definition if needed
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any); 
         console.log('[Kokoro Worker] Initialized with WebGPU (fp32)');
       } catch (e) {
         console.warn('[Kokoro Worker] WebGPU init failed, falling back to WASM', e);
@@ -49,6 +55,7 @@ ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           dtype: "q8",
           device: "wasm",
           progress_callback: progressCallback,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any);
       }
 
@@ -90,7 +97,8 @@ ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       }
 
       const result = await tts.generate(text, {
-        voice: selectedVoice as unknown as "af_heart", // Casting to known type or generic string if library supports it
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        voice: selectedVoice as any, 
       });
 
       if (result && result.audio) {

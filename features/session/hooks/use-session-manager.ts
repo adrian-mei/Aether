@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
 import { logger } from '@/shared/lib/logger';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
+import { memoryService } from '@/features/memory/services/memory-service';
 
 import { useSessionAccess } from './use-session-access';
 import { useBootSequence } from './use-boot-sequence';
@@ -99,7 +100,7 @@ export function useSessionManager() {
     let intervalId: NodeJS.Timeout;
     if (voiceState === 'processing') {
       intervalId = setInterval(() => {
-        const elapsed = Date.now() - conversation.state.lastActivity;
+        const elapsed = Date.now() - conversation.actions.getLastActivity();
         if (elapsed > 30000) {
           logger.warn('SESSION', 'Request timed out (no activity)', { elapsedMs: elapsed });
           resetVoice();
@@ -108,7 +109,7 @@ export function useSessionManager() {
       }, 1000);
     }
     return () => clearInterval(intervalId);
-  }, [voiceState, resetVoice, conversation.state.lastActivity]);
+  }, [voiceState, resetVoice, conversation.actions]);
 
   // Initialization Logic
   useEffect(() => {
@@ -137,30 +138,24 @@ export function useSessionManager() {
     initialize();
   }, [access.state.isReady, access.state.isLimitReached]);
 
-  // React to limit reached from access hook
-  useEffect(() => {
-      if (access.state.isLimitReached) {
-          setStatus('limit-reached');
-      }
-  }, [access.state.isLimitReached]);
-
   const handleStartSession = async () => {
     logger.info('APP', 'User clicked Start Session');
-    if (status === 'unsupported' || status === 'limit-reached') return;
+    if (status === 'unsupported' || access.state.isLimitReached) return;
 
-    // Services init
+    // Services init (Pre-warm workers)
     kokoroService.initialize().catch(err => logger.error('APP', 'Kokoro init failed', err));
+    memoryService.initialize().catch(err => logger.error('APP', 'Memory init failed', err));
     audioPlayer.resume().catch(err => logger.warn('APP', 'Failed to resume audio context', err));
 
     boot.actions.setPermissionStatus('pending');
-    const granted = await boot.actions.retryPermission().then(() => true).catch(() => false);
+    await boot.actions.retryPermission().then(() => true).catch(() => false);
     // Note: retryPermission sets state but we need to know result here. 
     // Actually boot.actions.retryPermission calls onComplete(true) if granted.
     // So we just need to call it.
   };
 
   const toggleListening = () => {
-    if (status === 'limit-reached') return;
+    if (access.state.isLimitReached) return;
     logger.info('APP', 'User clicked Toggle Listening', { currentState: voiceState });
     if (voiceState === 'idle') {
       startListening();
@@ -184,7 +179,7 @@ export function useSessionManager() {
 
   return {
     state: {
-      status: boot.state.isBooting ? 'booting' : status,
+      status: boot.state.isBooting ? 'booting' : (access.state.isLimitReached ? 'limit-reached' : status),
       isDebugOpen,
       voiceState,
       permissionStatus: boot.state.permissionStatus,

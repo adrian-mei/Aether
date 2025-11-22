@@ -25,7 +25,7 @@ describe('verifyAccessCode', () => {
     jest.resetModules();
     mockDigest.mockReset();
     // Reset Env mock
-    (Env as any).NEXT_PUBLIC_ACCESS_CODE_HASH = undefined;
+    (Env as unknown as { NEXT_PUBLIC_ACCESS_CODE_HASH: string | undefined }).NEXT_PUBLIC_ACCESS_CODE_HASH = undefined;
   });
 
   it('should return true for the correct code configured in env', async () => {
@@ -33,7 +33,7 @@ describe('verifyAccessCode', () => {
     // Use a dummy hash for testing
     const DUMMY_HASH = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
     
-    (Env as any).NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
+    (Env as unknown as { NEXT_PUBLIC_ACCESS_CODE_HASH: string | undefined }).NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
 
     // Mock digest to return the DUMMY_HASH bytes when called
     const buffer = new Uint8Array(DUMMY_HASH.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
@@ -46,7 +46,7 @@ describe('verifyAccessCode', () => {
 
   it('should return false for an incorrect code', async () => {
     const DUMMY_HASH = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-    (Env as any).NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
+    (Env as unknown as { NEXT_PUBLIC_ACCESS_CODE_HASH: string | undefined }).NEXT_PUBLIC_ACCESS_CODE_HASH = DUMMY_HASH;
 
     // Mock digest to return a DIFFERENT hash (e.g. for 'wrong-code')
     const WRONG_HASH = '0000000000000000000000000000000000000000000000000000000000000000';

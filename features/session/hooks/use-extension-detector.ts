@@ -14,7 +14,6 @@ export function useExtensionDetector() {
     const handleReversal = () => {
       const html = document.documentElement;
       const body = document.body;
-      const head = document.head;
 
       // 1. Attribute Removal
       const blockedAttributes = [

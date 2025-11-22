@@ -18,7 +18,7 @@ jest.mock('@/shared/lib/logger');
 describe('useSessionManager', () => {
   // Mocks
   const mockAccess = {
-    state: { interactionCount: 0, isUnlocked: false, accessCode: '', isLimitReached: false },
+    state: { interactionCount: 0, isUnlocked: false, accessCode: '', isLimitReached: false, isReady: true },
     actions: { incrementInteraction: jest.fn(), verifyAccessCode: jest.fn(), checkLimits: jest.fn() }
   };
 
@@ -58,16 +58,13 @@ describe('useSessionManager', () => {
     // We need to wait for the useEffect
     const { result } = renderHook(() => useSessionManager());
     
-    // Ideally we use waitFor if available, or just wait for state change
-    // renderHook from @testing-library/react handles async effects if we await
-    
     // Wait for initialization effect
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 0));
     });
     
-    // Check if status is updated (since we mocked browser support true)
-    // Note: The original hook uses setTimeout(0) inside useEffect, so we might need to wait a tick.
+    // Check if status is updated
+    expect(result.current.state.status).toBe('awaiting-boot');
   });
 
   it('should start boot sequence', () => {

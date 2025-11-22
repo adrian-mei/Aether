@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
@@ -61,11 +61,10 @@ export const AetherUI = ({
   const { playOcean } = useSessionAudio({ sessionStatus });
 
   // Reset modal dismissal when status changes to limit-reached
-  useEffect(() => {
-    if (sessionStatus === 'limit-reached') {
-      setIsModalDismissed(false);
-    }
-  }, [sessionStatus]);
+  // Logic: Using derived state pattern to avoid effect-based state updates
+  if (sessionStatus === 'limit-reached' && isModalDismissed) {
+    setIsModalDismissed(false);
+  }
 
   const handleInteraction = () => {
     if (sessionStatus === 'limit-reached') {

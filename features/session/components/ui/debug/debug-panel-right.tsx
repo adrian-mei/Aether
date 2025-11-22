@@ -6,7 +6,13 @@ import { Search, Trash2, Copy, Check } from 'lucide-react';
 
 export function DebugPanelRight() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [showVerbose, setShowVerbose] = useState(false);
+  // Lazy init state from localStorage (safe because this component is only mounted on client when debug mode is active)
+  const [showVerbose, setShowVerbose] = useState(() => {
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem('debug_verbose') === 'true';
+    }
+    return false;
+  });
   const [filterText, setFilterText] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -21,11 +27,6 @@ export function DebugPanelRight() {
   }, []);
 
   // Persist verbose setting
-  useEffect(() => {
-    const savedVerbose = localStorage.getItem('debug_verbose');
-    if (savedVerbose) setShowVerbose(savedVerbose === 'true');
-  }, []);
-
   useEffect(() => {
     localStorage.setItem('debug_verbose', String(showVerbose));
   }, [showVerbose]);

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { LogEntry } from '@/shared/lib/logger';
 
 export async function POST(req: Request) {
   try {
@@ -6,7 +7,7 @@ export async function POST(req: Request) {
     const { logs } = body;
 
     if (Array.isArray(logs)) {
-      logs.forEach((log: any) => {
+      logs.forEach((log: LogEntry) => {
         const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
         const prefix = `[CLIENT] [${timestamp}] [${log.level.toUpperCase()}] [${log.category}]`;
         const message = log.message;
