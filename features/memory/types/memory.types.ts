@@ -89,6 +89,7 @@ export type EmbeddingWorkerMessage =
 export type EmbeddingWorkerResponse =
   | { type: 'ready' }
   | { type: 'embedding'; data: Float32Array }
+  | { type: 'log'; level: 'info' | 'warn' | 'error' | 'debug'; message: string }
   | { type: 'error'; error: string };
 
 /**

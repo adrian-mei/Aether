@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger, LogEntry } from '../lib/logger';
-import { X, Trash2, PanelBottom, PanelLeft, PanelRight, Network } from 'lucide-react';
+import { X, Trash2, PanelBottom, PanelLeft, PanelRight, Network, MessageSquare } from 'lucide-react';
+
 interface DebugOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   onTestApi?: () => void;
+  onSimulateInput?: (text: string) => void;
 }
 
 type Position = 'bottom' | 'left' | 'right';
@@ -14,7 +16,8 @@ type Position = 'bottom' | 'left' | 'right';
 export default function DebugOverlay({ 
   isOpen, 
   onClose, 
-  onTestApi
+  onTestApi,
+  onSimulateInput
 }: DebugOverlayProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [activePanes, setActivePanes] = useState<string[]>(['VOICE', 'API', 'APP', 'error']);
@@ -201,6 +204,16 @@ export default function DebugOverlay({
           </div>
         </div>
         <div className="flex items-center gap-2 pl-2">
+          {onSimulateInput && (
+            <button 
+              onClick={() => onSimulateInput("Hello")} 
+              className="p-1 hover:text-lime-400 flex items-center gap-1" 
+              title="Simulate 'Hello'"
+            >
+              <MessageSquare size={14} />
+              <span className="text-[10px] font-medium hidden sm:inline">Simulate Input</span>
+            </button>
+          )}
           {onTestApi && (
             <button 
               onClick={onTestApi} 

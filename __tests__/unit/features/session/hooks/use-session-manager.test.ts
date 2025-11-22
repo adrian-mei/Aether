@@ -4,6 +4,8 @@ import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
 import { requestMicrophonePermission } from '@/features/voice/utils/permissions';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 import { verifyAccessCode } from '@/features/rate-limit/utils/access-code';
+import { memoryService } from '@/features/memory/services/memory-service';
+import { streamChatCompletion } from '@/features/ai/services/chat-service';
 
 // Mock Dependencies
 jest.mock('@/features/voice/hooks/use-voice-agent');
@@ -11,6 +13,13 @@ jest.mock('@/features/voice/utils/permissions');
 jest.mock('@/features/voice/utils/browser-support');
 jest.mock('@/features/rate-limit/utils/access-code');
 jest.mock('@/features/ai/services/chat-service');
+jest.mock('@/features/memory/services/memory-service', () => ({
+  memoryService: {
+    initialize: jest.fn().mockResolvedValue(undefined),
+    queryRelevant: jest.fn().mockResolvedValue([]),
+    extractAndStore: jest.fn().mockResolvedValue(0),
+  },
+}));
 jest.mock('@/shared/lib/logger', () => ({
   logger: {
     info: jest.fn(),
@@ -98,7 +107,7 @@ describe('useSessionManager', () => {
     expect(result.current.state.status).toBe('idle');
   });
 
-  it('should handle access code verification', async () => {
+  it('should handle access code verification without persistence', async () => {
     (verifyAccessCode as jest.Mock).mockResolvedValue(true);
     
     const { result } = renderHook(() => useSessionManager());
@@ -109,7 +118,8 @@ describe('useSessionManager', () => {
     });
 
     expect(isValid).toBe(true);
-    expect(localStorage.getItem('aether_access_code')).toBe('secret-code');
+    // Should NOT persist to localStorage (session-only)
+    expect(localStorage.getItem('aether_access_code')).toBeNull();
   });
 
   it('should toggle listening state', async () => {
@@ -139,9 +149,6 @@ describe('useSessionManager', () => {
         speak: mockSpeak,
         toggleMute: jest.fn(),
     });
-    // Re-render to pick up new mock return value isn't strictly how renderHook works with constant mocks, 
-    // but we can verify the logic branching if we could update the mock. 
-    // Since we mocked the hook module, subsequent calls inside the component rerender use the latest mock.
     
     const { result: result2 } = renderHook(() => useSessionManager());
     await act(async () => {

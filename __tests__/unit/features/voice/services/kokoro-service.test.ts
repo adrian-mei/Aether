@@ -15,6 +15,7 @@ jest.mock('@/shared/lib/logger', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),
+    debug: jest.fn(),
   },
 }));
 
@@ -89,6 +90,9 @@ describe('KokoroService', () => {
       text: 'Hello'
     }));
 
+    // Mock play to return a promise
+    (audioPlayer.play as jest.Mock).mockResolvedValue(undefined);
+
     // Simulate worker audio message
     const mockAudio = new Float32Array([0.1, 0.2]);
     if (workerHandlers.onmessage) {
@@ -99,9 +103,6 @@ describe('KokoroService', () => {
 
     // Wait for play to be called
     expect(audioPlayer.play).toHaveBeenCalledWith(mockAudio, 24000);
-    
-    // Resolve the play promise to complete the speak promise
-    (audioPlayer.play as jest.Mock).mockResolvedValue(undefined);
     
     await expect(speakPromise).resolves.toBeUndefined();
   });

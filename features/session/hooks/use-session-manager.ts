@@ -4,6 +4,7 @@ import { streamChatCompletion, ChatMessage } from '@/features/ai/services/chat-s
 import { buildSystemPrompt } from '@/features/ai/utils/system-prompt';
 import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/utils/permissions';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
+import { audioPlayer } from '@/features/voice/utils/audio-player';
 import { logger } from '@/shared/lib/logger';
 import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/access-code';
 import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
@@ -18,6 +19,7 @@ export function useSessionManager() {
   const [status, setStatus] = useState<SessionStatus>('initializing');
   const [interactionCount, setInteractionCount] = useState(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [accessCode, setAccessCode] = useState<string>('');
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
@@ -26,6 +28,7 @@ export function useSessionManager() {
   const speakRef = useRef<(text: string, options?: { autoResume?: boolean }) => Promise<void>>(async () => {});
   const resetRef = useRef<() => void>(() => {});
   const isProcessingRef = useRef(false);
+  const lastActivityRef = useRef<number>(0);
 
   // Message Queue for Streaming
   const { handleChunk, startStream, endStream } = useMessageQueue({
@@ -36,6 +39,8 @@ export function useSessionManager() {
   });
 
   const handleInputComplete = useCallback(async (text: string) => {
+    logger.info('SESSION', 'Processing input', { text });
+
     // Check rate limit first (unless unlocked)
     if (!isUnlocked && interactionCount >= MAX_INTERACTIONS) {
         setStatus('limit-reached');
@@ -66,6 +71,7 @@ export function useSessionManager() {
       await speakRef.current(goodbye, { autoResume: false });
       resetRef.current();
       setStatus('idle');
+      logger.info('SESSION', 'Chat ended (user command)');
       return;
     }
 
@@ -73,8 +79,23 @@ export function useSessionManager() {
     const newHistory = [...historyRef.current, userMessage];
     historyRef.current = newHistory;
 
-    // Retrieve relevant memories (async, non-blocking)
-    const relevantMemories = await memoryService.queryRelevant(text, { limit: 5 }).catch(() => []);
+    // Retrieve relevant memories (async, non-blocking with timeout)
+    // Race memory query against a 5s timeout (increased from 3s) to prevent hanging
+    const memoryPromise = memoryService.queryRelevant(text, { limit: 5 }).catch((err) => {
+        logger.error('SESSION', 'Memory retrieval failed', err);
+        return [];
+    });
+    
+    const timeoutPromise = new Promise<any[]>((resolve) => setTimeout(() => {
+        logger.warn('SESSION', 'Memory retrieval timed out after 5000ms, skipping');
+        resolve([]);
+    }, 5000));
+    
+    const relevantMemories = await Promise.race([memoryPromise, timeoutPromise]);
+    
+    if (relevantMemories.length > 0) {
+        logger.debug('SESSION', 'Retrieved memories', { count: relevantMemories.length });
+    }
 
     // Build system prompt with context and memories
     const sessionInteractionCount = Math.floor(newHistory.length / 2);
@@ -86,12 +107,18 @@ export function useSessionManager() {
 
     try {
       isProcessingRef.current = true;
+      lastActivityRef.current = Date.now();
       startStream();
 
+      logger.debug('SESSION', 'Starting stream completion');
       const assistantMessageText = await streamChatCompletion(
           newHistory, 
           systemPrompt, 
-          handleChunk
+          (chunk) => {
+            lastActivityRef.current = Date.now();
+            handleChunk(chunk);
+          },
+          accessCode // Pass ephemeral access code
       );
       
       endStream();
@@ -197,14 +224,19 @@ export function useSessionManager() {
 
   // Timeout Watchdog
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let intervalId: NodeJS.Timeout;
     if (voiceState === 'processing') {
-      timeoutId = setTimeout(() => {
-        logger.error('SESSION', 'Request timed out', { thresholdMs: 15000 });
-        reset();
-      }, 15000);
+      lastActivityRef.current = Date.now();
+      intervalId = setInterval(() => {
+        const elapsed = Date.now() - lastActivityRef.current;
+        if (elapsed > 30000) {
+          logger.warn('SESSION', 'Request timed out (no activity)', { elapsedMs: elapsed });
+          reset();
+          logger.info('SESSION', 'Chat ended (watchdog timeout)');
+        }
+      }, 1000);
     }
-    return () => clearTimeout(timeoutId);
+    return () => clearInterval(intervalId);
   }, [voiceState, reset]);
 
   // Initialization Flow
@@ -228,14 +260,14 @@ export function useSessionManager() {
       });
 
       // Ready - Check state
-      const accessCode = localStorage.getItem('aether_access_code');
-      const unlocked = !!accessCode;
+      // We no longer check localStorage for access code (session-only unlock)
       const storedCount = localStorage.getItem('aether_interaction_count');
 
       // Defer state update to avoid synchronous render warning
       setTimeout(() => {
-          if (storedCount && parseInt(storedCount, 10) >= MAX_INTERACTIONS && !unlocked) {
+          if (storedCount && parseInt(storedCount, 10) >= MAX_INTERACTIONS) {
               setStatus('limit-reached');
+              logger.info('SESSION', 'Session limit reached on startup');
           } else {
               setStatus('idle');
           }
@@ -246,16 +278,6 @@ export function useSessionManager() {
 
   // Load rate limit state with reset logic
   useEffect(() => {
-    // Check for access code first
-    const storedAccessCode = localStorage.getItem('aether_access_code');
-    if (storedAccessCode) {
-      // Verify stored code hash (simplified check since we trust local storage, but good to be safe)
-      // Ideally we re-verify, but async in useEffect is tricky. 
-      // We'll assume if it's there, it's valid or the server will reject it.
-      setTimeout(() => setIsUnlocked(true), 0);
-      return; 
-    }
-
     const storedCount = localStorage.getItem('aether_interaction_count');
     const storedTimestamp = localStorage.getItem('aether_limit_timestamp');
     
@@ -287,12 +309,17 @@ export function useSessionManager() {
     logger.info('APP', 'User clicked Start Session');
     if (status === 'unsupported' || status === 'limit-reached') return;
 
+    // Initialize/Resume AudioContext on user interaction to unlock audio on mobile
+    audioPlayer.resume().catch(err => {
+        logger.warn('APP', 'Failed to resume audio context', err);
+    });
+
     setPermissionStatus('pending');
     const granted = await requestMicrophonePermission();
     if (granted) {
       setPermissionStatus('granted');
       setStatus('running');
-      const greeting = "Hello, I am Aether. How are you feeling right now?";
+      const greeting = "Hello, I am Aether. I'm here to listen, validate your feelings, and help you explore your inner world without judgment. How are you feeling right now?";
       setCurrentAssistantMessage(greeting);
       speak(greeting);
     } else {
@@ -328,10 +355,12 @@ export function useSessionManager() {
     const isValid = await verifyHash(code);
     if (isValid) {
       setIsUnlocked(true);
-      localStorage.setItem('aether_access_code', code);
+      setAccessCode(code); // Store in memory only
+      // localStorage.setItem('aether_access_code', code); // REMOVED: Session-only persistence
       if (status === 'limit-reached') {
           setStatus('idle');
       }
+      logger.info('SESSION', 'Access code verified successfully');
       return true;
     }
     return false;
@@ -347,6 +376,7 @@ export function useSessionManager() {
     },
     actions: {
       handleStartSession,
+      handleInputComplete, // Exposed for debugging
       toggleListening,
       toggleDebug,
       toggleMute: () => {
