@@ -1,11 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { VoiceInteractionState } from '@/features/voice/hooks/core/use-voice-interaction';
-import { PermissionStatus } from '@/features/voice/utils/permissions';
-import { SessionStatus } from '../hooks/use-session-manager';
-import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
-import type { TokenUsage } from '@/features/ai/types/chat.types';
 import { WaitlistModal } from './modals/waitlist-modal';
 import { chatService } from '@/features/ai/services/chat-service';
 
@@ -13,6 +8,7 @@ import { chatService } from '@/features/ai/services/chat-service';
 import { useAetherVisuals } from '../hooks/visuals/use-aether-visuals';
 import { useSessionAudio } from '../hooks/audio/use-session-audio';
 import { useOnlineStatus } from '@/shared/hooks/use-online-status';
+import { useSession } from '../context/session-context';
 
 // Sub-components
 import { Header } from './layouts/header';
@@ -23,44 +19,10 @@ import { StatusDisplay } from './status/status-display';
 import { DebugPanelLeft } from './debug/debug-panel-left';
 import { DebugPanelRight } from './debug/debug-panel-right';
 import { LandscapeWarning } from './layouts/landscape-warning';
+import { IOSInstallPrompt } from './modals/ios-install-prompt';
 
-interface AetherUIProps {
-  voiceState: VoiceInteractionState;
-  permissionStatus: PermissionStatus;
-  sessionStatus: SessionStatus;
-  modelCacheStatus: ModelCacheStatus;
-  downloadProgress: number | null;
-  currentAssistantMessage?: string;
-  currentMessageDuration?: number;
-  transcript?: string;
-  turnCount: number;
-  tokenUsage?: TokenUsage;
-  isDebugMode: boolean;
-  onStartSession: () => void;
-  onToggleListening: () => void;
-  onBypass: (code: string) => Promise<boolean>;
-  onSimulateInput: (text: string) => void;
-  onToggleDebug: () => void;
-}
-
-export const AetherUI = ({ 
-  voiceState, 
-  permissionStatus, 
-  sessionStatus,
-  modelCacheStatus,
-  downloadProgress,
-  currentAssistantMessage,
-  currentMessageDuration,
-  transcript,
-  turnCount,
-  tokenUsage,
-  isDebugMode,
-  onStartSession, 
-  onToggleListening,
-  onBypass,
-  onSimulateInput,
-  onToggleDebug
-}: AetherUIProps) => {
+export const AetherUI = () => {
+  const { state, actions } = useSession();
   const [isModalDismissed, setIsModalDismissed] = useState(false);
   const isOnline = useOnlineStatus();
   
@@ -71,71 +33,80 @@ export const AetherUI = ({
     breatheIntensity,
     visualStatus 
   } = useAetherVisuals({ 
-    sessionStatus, 
-    voiceState,
-    permissionStatus,
-    modelCacheStatus,
-    downloadProgress,
-    currentAssistantMessage,
-    currentMessageDuration,
-    transcript,
+    sessionStatus: state.status, 
+    voiceState: state.voiceState,
+    permissionStatus: state.permissionStatus,
+    modelCacheStatus: state.modelCacheStatus,
+    downloadProgress: state.downloadProgress,
+    currentAssistantMessage: state.currentAssistantMessage,
+    currentMessageDuration: state.currentMessageDuration,
+    transcript: state.transcript,
     isOnline
   });
   
-  const { playOcean } = useSessionAudio({ sessionStatus });
+  const { playOcean } = useSessionAudio({ sessionStatus: state.status });
 
   // Keyboard shortcut for debug toggle (Cmd/Ctrl + .)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === '.') {
         e.preventDefault();
-        onToggleDebug();
+        actions.toggleDebug();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onToggleDebug]);
+  }, [actions]);
 
   // Reset modal dismissal when status changes to limit-reached
   // Logic: Using derived state pattern to avoid effect-based state updates
-  if (sessionStatus === 'limit-reached' && isModalDismissed) {
+  if (state.status === 'limit-reached' && isModalDismissed) {
     setIsModalDismissed(false);
   }
 
   const handleInteraction = () => {
-    if (sessionStatus === 'limit-reached') {
+    if (state.status === 'limit-reached') {
       setIsModalDismissed(false); // Re-open modal if dismissed
       return;
     }
     
     // Prevent interaction if downloading
-    if (downloadProgress !== null && downloadProgress < 100) return;
+    if (state.downloadProgress !== null && state.downloadProgress < 100) return;
 
-    if (sessionStatus === 'initializing') return; // Ignore clicks during init
+    if (state.status === 'initializing') return; // Ignore clicks during init
 
     // Trigger background audio
     playOcean();
 
     if (!isOnline) return;
-    if (sessionStatus === 'unsupported' || sessionStatus === 'insecure-context') return;
+    if (state.status === 'unsupported' || state.status === 'insecure-context') return;
     
-    if (sessionStatus === 'idle' || sessionStatus === 'awaiting-boot') {
-      onStartSession();
+    if (state.status === 'idle' || state.status === 'awaiting-boot') {
+      // If waiting for boot, use boot sequence, otherwise start session directly (if already booted/idle)
+      // Actually SessionContainer logic was: state.status === 'awaiting-boot' ? actions.startBootSequence : actions.handleStartSession
+      // Wait, handleStartSession calls startBootSequence logic internally or re-triggers it?
+      // Let's match previous logic:
+      if (state.status === 'awaiting-boot') {
+          actions.startBootSequence();
+      } else {
+          actions.handleStartSession();
+      }
     } else {
-      onToggleListening();
+      actions.toggleListening();
     }
   };
 
   return (
-    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none">
+    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none pt-safe">
       <LandscapeWarning />
+      <IOSInstallPrompt />
       
       <WaitlistModal 
-        isOpen={sessionStatus === 'limit-reached' && !isModalDismissed} 
+        isOpen={state.status === 'limit-reached' && !isModalDismissed} 
         onJoin={(email) => console.log('Waitlist join:', email)} 
         onClose={() => setIsModalDismissed(true)}
-        onBypass={onBypass}
+        onBypass={actions.verifyAccessCode}
       />
 
       {/* Deep gradient overlay for depth */}
@@ -163,16 +134,16 @@ export const AetherUI = ({
         <Header uiVoiceState={uiVoiceState} />
 
         {/* Integrated Debug Panels */}
-        {isDebugMode && (
+        {state.isDebugOpen && (
           <>
             <DebugPanelLeft 
-              voiceState={voiceState}
-              permissionStatus={permissionStatus}
-              sessionStatus={sessionStatus}
-              modelCacheStatus={modelCacheStatus}
-              tokenUsage={tokenUsage}
+              voiceState={state.voiceState}
+              permissionStatus={state.permissionStatus}
+              sessionStatus={state.status}
+              modelCacheStatus={state.modelCacheStatus}
+              tokenUsage={state.tokenUsage}
               onTestApi={() => chatService.testApiConnection()}
-              onSimulateInput={onSimulateInput}
+              onSimulateInput={actions.handleInputComplete}
             />
             <DebugPanelRight />
           </>
@@ -182,18 +153,18 @@ export const AetherUI = ({
         <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
             <OrbContainer 
                 uiVoiceState={uiVoiceState}
-                sessionStatus={sessionStatus}
-                permissionStatus={permissionStatus}
+                sessionStatus={state.status}
+                permissionStatus={state.permissionStatus}
                 emotionalTone={emotionalTone}
-                downloadProgress={downloadProgress}
+                downloadProgress={state.downloadProgress}
                 onInteraction={handleInteraction}
             />
 
             <StatusDisplay 
                 uiVoiceState={uiVoiceState}
                 visualStatus={visualStatus}
-                currentAssistantMessage={currentAssistantMessage}
-                turnCount={turnCount}
+                currentAssistantMessage={state.currentAssistantMessage}
+                turnCount={state.turnCount}
             />
         </div>
 

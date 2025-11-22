@@ -47,6 +47,14 @@ export const OrbContainer = ({
     return shadows[uiVoiceState] || shadows.idle;
   };
 
+  const handleInteraction = () => {
+    // Haptic feedback
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(15);
+    }
+    onInteraction();
+  };
+
   return (
     <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
       <div className="relative">
@@ -87,7 +95,7 @@ export const OrbContainer = ({
         {/* Main Interactive Orb */}
         <button
           ref={orbRef}
-          onClick={onInteraction}
+          onClick={handleInteraction}
           className={`
             relative w-[35vmin] h-[35vmin] max-w-[256px] max-h-[256px] min-w-[200px] min-h-[200px] rounded-full
             bg-gradient-to-br ${getOrbGradient()}
