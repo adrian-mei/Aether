@@ -1,104 +1,112 @@
 'use client';
 
-import React, { useState } from 'react';
-import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
-import { PermissionStatus } from '@/features/voice/utils/permissions';
-import { SessionStatus } from '../hooks/use-session-manager';
-import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
-import type { TokenUsage } from '@/features/ai/types/chat.types';
-import { WaitlistModal } from './waitlist-modal';
+import React, { useState, useEffect } from 'react';
+import { WaitlistModal } from './modals/waitlist-modal';
 import { chatService } from '@/features/ai/services/chat-service';
 
 // Hooks
-import { useAetherVisuals } from '../hooks/use-aether-visuals';
-import { useSessionAudio } from '../hooks/use-session-audio';
+import { useAetherVisuals } from '../hooks/visuals/use-aether-visuals';
+import { useSessionAudio } from '../hooks/audio/use-session-audio';
+import { useOnlineStatus } from '@/shared/hooks/use-online-status';
+import { useSession } from '../context/session-context';
 
 // Sub-components
-import { Header } from './ui/header';
-import { Footer } from './ui/footer';
-import { BackgroundOrbs } from './ui/background-orbs';
-import { OrbContainer } from './ui/orb-container';
-import { StatusDisplay } from './ui/status-display';
-import { DebugPanelLeft } from './ui/debug/debug-panel-left';
-import { DebugPanelRight } from './ui/debug/debug-panel-right';
+import { Header } from './layouts/header';
+import { Footer } from './layouts/footer';
+import { BackgroundOrbs } from './visuals/background-orbs';
+import { OrbContainer } from './visuals/orb-container';
+import { StatusDisplay } from './status/status-display';
+import { DebugPanelLeft } from './debug/debug-panel-left';
+import { DebugPanelRight } from './debug/debug-panel-right';
+import { LandscapeWarning } from './layouts/landscape-warning';
+import { IOSInstallPrompt } from './modals/ios-install-prompt';
 
-interface AetherUIProps {
-  voiceState: VoiceAgentState;
-  permissionStatus: PermissionStatus;
-  sessionStatus: SessionStatus;
-  modelCacheStatus: ModelCacheStatus;
-  downloadProgress: number | null;
-  currentAssistantMessage?: string;
-  currentMessageDuration?: number;
-  transcript?: string;
-  turnCount: number;
-  tokenUsage?: TokenUsage;
-  isDebugMode: boolean;
-  onStartSession: () => void;
-  onToggleListening: () => void;
-  onBypass: (code: string) => Promise<boolean>;
-  onSimulateInput: (text: string) => void;
-}
-
-export const AetherUI = ({ 
-  voiceState, 
-  permissionStatus, 
-  sessionStatus,
-  modelCacheStatus,
-  downloadProgress,
-  currentAssistantMessage,
-  currentMessageDuration,
-  transcript,
-  turnCount,
-  tokenUsage,
-  isDebugMode,
-  onStartSession, 
-  onToggleListening,
-  onBypass,
-  onSimulateInput
-}: AetherUIProps) => {
+export const AetherUI = () => {
+  const { state, actions } = useSession();
   const [isModalDismissed, setIsModalDismissed] = useState(false);
+  const isOnline = useOnlineStatus();
   
   // Custom Hooks
-  const { uiVoiceState, emotionalTone, breatheIntensity } = useAetherVisuals({ sessionStatus, voiceState });
-  const { playOcean } = useSessionAudio({ sessionStatus });
+  const { 
+    uiVoiceState, 
+    emotionalTone, 
+    breatheIntensity,
+    visualStatus 
+  } = useAetherVisuals({ 
+    sessionStatus: state.status, 
+    voiceState: state.voiceState,
+    permissionStatus: state.permissionStatus,
+    modelCacheStatus: state.modelCacheStatus,
+    downloadProgress: state.downloadProgress,
+    currentAssistantMessage: state.currentAssistantMessage,
+    currentMessageDuration: state.currentMessageDuration,
+    transcript: state.transcript,
+    isOnline
+  });
+  
+  const { playOcean } = useSessionAudio({ sessionStatus: state.status });
+
+  // Keyboard shortcut for debug toggle (Cmd/Ctrl + .)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+        e.preventDefault();
+        actions.toggleDebug();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [actions]);
 
   // Reset modal dismissal when status changes to limit-reached
   // Logic: Using derived state pattern to avoid effect-based state updates
-  if (sessionStatus === 'limit-reached' && isModalDismissed) {
+  if (state.status === 'limit-reached' && isModalDismissed) {
     setIsModalDismissed(false);
   }
 
   const handleInteraction = () => {
-    if (sessionStatus === 'limit-reached') {
+    if (state.status === 'limit-reached') {
       setIsModalDismissed(false); // Re-open modal if dismissed
       return;
     }
     
     // Prevent interaction if downloading
-    if (downloadProgress !== null && downloadProgress < 100) return;
+    if (state.downloadProgress !== null && state.downloadProgress < 100) return;
 
-    if (sessionStatus === 'initializing') return; // Ignore clicks during init
+    if (state.status === 'initializing') return; // Ignore clicks during init
 
     // Trigger background audio
     playOcean();
 
-    if (sessionStatus === 'unsupported' || sessionStatus === 'insecure-context') return;
+    if (!isOnline) return;
+    if (state.status === 'unsupported' || state.status === 'insecure-context') return;
     
-    if (sessionStatus === 'idle' || sessionStatus === 'awaiting-boot') {
-      onStartSession();
+    if (state.status === 'idle' || state.status === 'awaiting-boot') {
+      // If waiting for boot, use boot sequence, otherwise start session directly (if already booted/idle)
+      // Actually SessionContainer logic was: state.status === 'awaiting-boot' ? actions.startBootSequence : actions.handleStartSession
+      // Wait, handleStartSession calls startBootSequence logic internally or re-triggers it?
+      // Let's match previous logic:
+      if (state.status === 'awaiting-boot') {
+          actions.startBootSequence();
+      } else {
+          actions.handleStartSession();
+      }
     } else {
-      onToggleListening();
+      actions.toggleListening();
     }
   };
 
   return (
-    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none">
+    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none pt-safe">
+      <LandscapeWarning />
+      <IOSInstallPrompt />
+      
       <WaitlistModal 
-        isOpen={sessionStatus === 'limit-reached' && !isModalDismissed} 
+        isOpen={state.status === 'limit-reached' && !isModalDismissed} 
         onJoin={(email) => console.log('Waitlist join:', email)} 
         onClose={() => setIsModalDismissed(true)}
-        onBypass={onBypass}
+        onBypass={actions.verifyAccessCode}
       />
 
       {/* Deep gradient overlay for depth */}
@@ -126,16 +134,16 @@ export const AetherUI = ({
         <Header uiVoiceState={uiVoiceState} />
 
         {/* Integrated Debug Panels */}
-        {isDebugMode && (
+        {state.isDebugOpen && (
           <>
             <DebugPanelLeft 
-              voiceState={voiceState}
-              permissionStatus={permissionStatus}
-              sessionStatus={sessionStatus}
-              modelCacheStatus={modelCacheStatus}
-              tokenUsage={tokenUsage}
+              voiceState={state.voiceState}
+              permissionStatus={state.permissionStatus}
+              sessionStatus={state.status}
+              modelCacheStatus={state.modelCacheStatus}
+              tokenUsage={state.tokenUsage}
               onTestApi={() => chatService.testApiConnection()}
-              onSimulateInput={onSimulateInput}
+              onSimulateInput={actions.handleInputComplete}
             />
             <DebugPanelRight />
           </>
@@ -145,23 +153,18 @@ export const AetherUI = ({
         <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
             <OrbContainer 
                 uiVoiceState={uiVoiceState}
-                sessionStatus={sessionStatus}
-                permissionStatus={permissionStatus}
+                sessionStatus={state.status}
+                permissionStatus={state.permissionStatus}
                 emotionalTone={emotionalTone}
-                downloadProgress={downloadProgress}
+                downloadProgress={state.downloadProgress}
                 onInteraction={handleInteraction}
             />
 
             <StatusDisplay 
                 uiVoiceState={uiVoiceState}
-                sessionStatus={sessionStatus}
-                permissionStatus={permissionStatus}
-                modelCacheStatus={modelCacheStatus}
-                downloadProgress={downloadProgress}
-                currentAssistantMessage={currentAssistantMessage}
-                currentMessageDuration={currentMessageDuration}
-                transcript={transcript}
-                turnCount={turnCount}
+                visualStatus={visualStatus}
+                currentAssistantMessage={state.currentAssistantMessage}
+                turnCount={state.turnCount}
             />
         </div>
 

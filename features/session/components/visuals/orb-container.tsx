@@ -1,43 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef } from 'react';
 import { Lock, Compass, AlertCircle, Play } from 'lucide-react';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
-
-const Bubbles = () => {
-  const [bubbles, setBubbles] = useState<Array<{
-    width: string;
-    height: string;
-    left: string;
-    animationDuration: string;
-    animationDelay: string;
-  }>>([]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBubbles([...Array(3)].map(() => ({
-      width: Math.random() * 20 + 10 + 'px',
-      height: Math.random() * 20 + 10 + 'px',
-      left: Math.random() * 100 + '%',
-      animationDuration: Math.random() * 2 + 2 + 's',
-      animationDelay: Math.random() * 1 + 's'
-    })));
-  }, []);
-
-  return (
-    <>
-      {bubbles.map((style, i) => (
-        <div 
-            key={i}
-            className="absolute bg-teal-300/30 rounded-full animate-floatSmooth"
-            style={{
-                ...style,
-                bottom: '-20px'
-            }}
-        />
-      ))}
-    </>
-  );
-};
+import { Bubbles } from './bubbles';
 
 interface OrbContainerProps {
   uiVoiceState: string;
@@ -82,6 +47,14 @@ export const OrbContainer = ({
     return shadows[uiVoiceState] || shadows.idle;
   };
 
+  const handleInteraction = () => {
+    // Haptic feedback
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(15);
+    }
+    onInteraction();
+  };
+
   return (
     <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
       <div className="relative">
@@ -122,7 +95,7 @@ export const OrbContainer = ({
         {/* Main Interactive Orb */}
         <button
           ref={orbRef}
-          onClick={onInteraction}
+          onClick={handleInteraction}
           className={`
             relative w-[35vmin] h-[35vmin] max-w-[256px] max-h-[256px] min-w-[200px] min-h-[200px] rounded-full
             bg-gradient-to-br ${getOrbGradient()}

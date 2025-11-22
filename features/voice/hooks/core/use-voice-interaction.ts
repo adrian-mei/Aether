@@ -1,14 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/shared/lib/logger';
-import { useSpeechRecognition } from './use-speech-recognition';
-import { useTTS } from './use-tts';
+import { useSpeechRecognition } from '../recognition/use-speech-recognition';
+import { useTTS } from '../synthesis/use-tts';
+import { audioPlayer } from '@/features/voice/utils/audio-player';
 
-export type VoiceAgentState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
+export type VoiceInteractionState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
 
-export function useVoiceAgent(
-  onInputComplete: (text: string) => void,
-  onSilence?: () => void
-) {
+export interface VoiceEvent {
+    type: 'input' | 'silence';
+    payload?: string | number;
+}
+
+export function useVoiceInteraction() {
   // Explicit overrides for states that cannot be purely derived from sub-hooks
   const [manualState, setManualState] = useState<'processing' | 'muted' | null>(null);
   
@@ -17,19 +20,25 @@ export function useVoiceAgent(
     isListening, 
     transcript, 
     error: recognitionError, 
+    lastInput,
+    silenceDetected,
     startListening: startSR, 
     stopListening: stopSR,
     resetTranscript
-  } = useSpeechRecognition({
-    onInputComplete: (text) => {
-      setManualState('processing');
-      onInputComplete(text);
-    },
-    onSilence: () => {
-        if (onSilence) onSilence();
-        setManualState(null);
-    }
-  });
+  } = useSpeechRecognition();
+
+  // Reactive State Logic
+  useEffect(() => {
+      if (lastInput) {
+          setManualState('processing');
+      }
+  }, [lastInput]);
+
+  useEffect(() => {
+      if (silenceDetected) {
+          setManualState(null);
+      }
+  }, [silenceDetected]);
 
   // 2. Text-to-Speech
   const { 
@@ -38,8 +47,10 @@ export function useVoiceAgent(
     stop: stopTTS 
   } = useTTS();
 
+  const wasListeningRef = useRef(false);
+
   // Derived State
-  let state: VoiceAgentState = 'idle';
+  let state: VoiceInteractionState = 'idle';
   if (recognitionError === 'permission-denied') {
       state = 'permission-denied';
   } else if (isSpeaking) {
@@ -68,6 +79,44 @@ export function useVoiceAgent(
     stopTTS();
     setManualState(null);
   }, [stopSR, stopTTS]);
+
+  // Handle visibility changes (Mobile lifecycle)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.hidden) {
+        if (stateRef.current === 'listening') {
+            logger.info('VOICE', 'App backgrounded, pausing listening');
+            wasListeningRef.current = true;
+            stopSR();
+        } else {
+            wasListeningRef.current = false;
+        }
+        
+        // Stop speaking on background to prevent battery drain/quirks
+        if (isSpeaking) {
+             stopTTS();
+        }
+      } else {
+        // App foregrounded
+        logger.info('VOICE', 'App foregrounded');
+        
+        // Resume Audio Context (Vital for iOS)
+        try {
+            await audioPlayer.resume();
+        } catch (e) {
+            logger.warn('VOICE', 'Failed to resume audio context on foreground', e);
+        }
+
+        if (wasListeningRef.current && stateRef.current !== 'muted') {
+            logger.info('VOICE', 'Resuming listening from background state');
+            startListening();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isSpeaking, stopSR, startListening, stopTTS]);
 
   const toggleMute = useCallback(() => {
     if (stateRef.current === 'muted') {
@@ -122,11 +171,13 @@ export function useVoiceAgent(
   return {
     state,
     transcript,
+    lastInput,
+    silenceDetected,
     startListening,
     stopListening,
     reset,
     speak,
     toggleMute,
-    setState: () => logger.warn('VOICE', 'setState is deprecated in useVoiceAgent') // No-op for compatibility
+    setState: () => logger.warn('VOICE', 'setState is deprecated in useVoiceInteraction') // No-op for compatibility
   };
 }

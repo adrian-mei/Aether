@@ -1,5 +1,5 @@
 import { streamText } from 'ai';
-import { getGoogleProvider, MODEL_NAME } from '@/shared/config/ai-config';
+import { getGoogleProvider, MODEL_NAME } from '@/features/ai/config/ai-config';
 import { serverRateLimiter } from '@/features/rate-limit/server/rate-limiter';
 import { Env } from '@/shared/config/env';
 
@@ -53,8 +53,11 @@ export async function POST(req: Request) {
         }
 
         // Usage is available after stream finishes
-        const usage = await result.usage as unknown as { promptTokens: number; completionTokens: number; totalTokens: number };
-        const { promptTokens, completionTokens, totalTokens } = usage;
+        const usage = await result.usage as unknown as { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+        const promptTokens = usage?.promptTokens || 0;
+        const completionTokens = usage?.completionTokens || 0;
+        const totalTokens = usage?.totalTokens || 0;
+
         const cost = (promptTokens / 1_000_000 * INPUT_COST_PER_MILLION) + 
                      (completionTokens / 1_000_000 * OUTPUT_COST_PER_MILLION);
         

@@ -1,15 +1,15 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSessionManager } from './use-session-manager';
-import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
-import { useBootSequence } from './use-boot-sequence';
-import { useSessionAccess } from './use-session-access';
-import { useConversation } from './use-conversation';
+import { useVoiceInteraction } from '@/features/voice/hooks/core/use-voice-interaction';
+import { useBootSequence } from './lifecycle/use-boot-sequence';
+import { useSessionAccess } from './access/use-session-access';
+import { useConversation } from './chat/use-conversation';
 import { isBrowserSupported, isSecureContext } from '@/features/voice/utils/browser-support';
 
-jest.mock('@/features/voice/hooks/use-voice-agent');
-jest.mock('./use-boot-sequence');
-jest.mock('./use-session-access');
-jest.mock('./use-conversation');
+jest.mock('@/features/voice/hooks/core/use-voice-interaction');
+jest.mock('./lifecycle/use-boot-sequence');
+jest.mock('./access/use-session-access');
+jest.mock('./chat/use-conversation');
 jest.mock('@/features/voice/utils/browser-support');
 jest.mock('@/features/voice/services/kokoro-service');
 jest.mock('@/features/voice/utils/audio-player');
@@ -48,7 +48,7 @@ describe('useSessionManager', () => {
     (useSessionAccess as jest.Mock).mockReturnValue(mockAccess);
     (useBootSequence as jest.Mock).mockReturnValue(mockBoot);
     (useConversation as jest.Mock).mockReturnValue(mockConversation);
-    (useVoiceAgent as jest.Mock).mockReturnValue(mockVoice);
+    (useVoiceInteraction as jest.Mock).mockReturnValue(mockVoice);
     
     (isBrowserSupported as jest.Mock).mockResolvedValue(true);
     (isSecureContext as jest.Mock).mockReturnValue(true);
@@ -59,17 +59,18 @@ describe('useSessionManager', () => {
     const { result } = renderHook(() => useSessionManager());
     
     // Wait for initialization effect
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+    await waitFor(() => {
+      expect(result.current.state.status).toBe('awaiting-boot');
     });
-    
-    // Check if status is updated
-    expect(result.current.state.status).toBe('awaiting-boot');
   });
 
-  it('should start boot sequence', () => {
+  it('should start boot sequence', async () => {
     const { result } = renderHook(() => useSessionManager());
     
+    await waitFor(() => {
+      expect(result.current.state.status).toBe('awaiting-boot');
+    });
+
     act(() => {
       result.current.actions.startBootSequence();
     });
@@ -77,9 +78,13 @@ describe('useSessionManager', () => {
     expect(mockBoot.actions.startBootSequence).toHaveBeenCalled();
   });
 
-  it('should toggle listening', () => {
+  it('should toggle listening', async () => {
     const { result } = renderHook(() => useSessionManager());
     
+    await waitFor(() => {
+      expect(result.current.state.status).toBe('awaiting-boot');
+    });
+
     act(() => {
       result.current.actions.toggleListening();
     });

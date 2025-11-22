@@ -1,39 +1,12 @@
 'use client';
 
-import { useSessionManager } from '@/features/session/hooks/use-session-manager';
-import { AetherUI } from './aether-ui';
-import { useExtensionDetector } from '@/features/session/hooks/use-extension-detector';
-import { DebugControls } from '@/shared/components/debug-controls';
+import { SessionProvider } from '../context/session-context';
+import { SessionLayout } from './session-layout';
 
 export function SessionContainer() {
-  const { state, actions } = useSessionManager();
-  useExtensionDetector();
-
   return (
-    <main className="relative min-h-screen w-full overflow-hidden">
-      <AetherUI
-        voiceState={state.voiceState}
-        permissionStatus={state.permissionStatus}
-        sessionStatus={state.status}
-        modelCacheStatus={state.modelCacheStatus}
-        downloadProgress={state.downloadProgress}
-        currentAssistantMessage={state.currentAssistantMessage}
-        currentMessageDuration={state.currentMessageDuration}
-        transcript={state.transcript}
-        turnCount={state.turnCount}
-        tokenUsage={state.tokenUsage}
-        isDebugMode={state.isDebugOpen}
-        onStartSession={state.status === 'awaiting-boot' ? actions.startBootSequence : actions.handleStartSession}
-        onToggleListening={actions.toggleListening}
-        onBypass={actions.verifyAccessCode}
-        onSimulateInput={actions.handleInputComplete}
-      />
-
-      <DebugControls 
-        isOpen={state.isDebugOpen}
-        onToggle={actions.toggleDebug}
-        onSimulateInput={actions.handleInputComplete}
-      />
-    </main>
+    <SessionProvider>
+      <SessionLayout />
+    </SessionProvider>
   );
 }

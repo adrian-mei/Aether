@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
+import { useMessageQueue } from './use-message-queue';
 
 describe('useMessageQueue', () => {
   const mockOnSpeak = jest.fn();
