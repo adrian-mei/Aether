@@ -27,14 +27,15 @@ graph TD
 ## Core Modules
 
 ### 1. Session Management (`features/session`)
-Handles the lifecycle of a user session, including:
+Handles the lifecycle of a user session using a Context-based architecture:
+-   **`SessionContext`**: Provides global state to avoid prop drilling.
+-   **`useInteractionLoop`**: Manages the core event loop (input -> processing -> output).
 -   **Boot Sequence**: Loading models and initializing services.
 -   **Access Control**: Rate limiting and access codes.
--   **Visual State**: Orchestrating the UI (`StatusDisplay`, `OrbContainer`).
 
 ### 2. Voice Pipeline (`features/voice`)
 Manages audio input and output:
--   **`useVoiceAgent`**: The central coordinator for voice interactions.
+-   **`useVoiceInteraction`**: The central coordinator for voice interactions (handles visibility/backgrounding).
 -   **`useSpeechRecognition`**: Wraps the Web Speech API for STT.
 -   **`useTTS`**: Manages Text-to-Speech generation using Kokoro (WebGPU) with fallback to Web Speech API.
 -   **`AudioPlayer`**: Handles gapless audio playback queues.
@@ -45,6 +46,11 @@ Manages audio input and output:
 
 ### 4. Local Memory (`features/memory`)
 -   **`memory-service`**: Stores and retrieves conversation embeddings using a local vector database (client-side RAG) backed by IndexedDB.
+
+### 5. Mobile & Resilience
+-   **Wake Lock**: Keeps the screen active during sessions.
+-   **Offline Support**: Blocks interactions and updates UI when network is lost.
+-   **Lifecycle Management**: Pauses audio/recognition when the app is backgrounded to save battery and prevent crashes.
 
 ## Data Flow
 

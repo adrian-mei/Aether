@@ -10,6 +10,8 @@ Aether is a browser-based, voice-first AI companion designed to provide a safe, 
 *   **Active Engagement**: Proactively re-engages during silence.
 *   **Long-Term Memory**: Vector-based local memory (RAG) to remember context over time.
 *   **Ambient UI**: Glassmorphic interface with organic animations.
+*   **Mobile-First Design**: Haptic feedback, safe-area awareness, and PWA support for native-like feel.
+*   **Network Resilience**: Robust offline detection and state recovery.
 
 ## 📚 Documentation
 
