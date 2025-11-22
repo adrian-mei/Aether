@@ -79,11 +79,11 @@ export async function POST(req: Request) {
         try {
             const errorData = JSON.stringify({ type: 'error', content: 'Stream error' });
             controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
-        } catch (e) {
+        } catch {
             // Ignore errors sending the error message (controller likely closed)
         }
       } finally {
-        try { controller.close(); } catch(e) {}
+        try { controller.close(); } catch {}
       }
     }
   });

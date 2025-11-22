@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
+import type { TokenUsage } from '@/features/ai/types/chat.types';
 import { WaitlistModal } from './waitlist-modal';
+import { chatService } from '@/features/ai/services/chat-service';
 
 // Hooks
 import { useAetherVisuals } from '../hooks/use-aether-visuals';
@@ -17,6 +19,8 @@ import { Footer } from './ui/footer';
 import { BackgroundOrbs } from './ui/background-orbs';
 import { OrbContainer } from './ui/orb-container';
 import { StatusDisplay } from './ui/status-display';
+import { DebugPanelLeft } from './ui/debug/debug-panel-left';
+import { DebugPanelRight } from './ui/debug/debug-panel-right';
 
 interface AetherUIProps {
   voiceState: VoiceAgentState;
@@ -28,9 +32,12 @@ interface AetherUIProps {
   currentMessageDuration?: number;
   transcript?: string;
   turnCount: number;
+  tokenUsage?: TokenUsage;
+  isDebugMode: boolean;
   onStartSession: () => void;
   onToggleListening: () => void;
   onBypass: (code: string) => Promise<boolean>;
+  onSimulateInput: (text: string) => void;
 }
 
 export const AetherUI = ({ 
@@ -43,9 +50,12 @@ export const AetherUI = ({
   currentMessageDuration,
   transcript,
   turnCount,
+  tokenUsage,
+  isDebugMode,
   onStartSession, 
   onToggleListening,
-  onBypass
+  onBypass,
+  onSimulateInput
 }: AetherUIProps) => {
   const [isModalDismissed, setIsModalDismissed] = useState(false);
   
@@ -54,11 +64,10 @@ export const AetherUI = ({
   const { playOcean } = useSessionAudio({ sessionStatus });
 
   // Reset modal dismissal when status changes to limit-reached
-  useEffect(() => {
-    if (sessionStatus === 'limit-reached') {
-      setIsModalDismissed(false);
-    }
-  }, [sessionStatus]);
+  // Logic: Using derived state pattern to avoid effect-based state updates
+  if (sessionStatus === 'limit-reached' && isModalDismissed) {
+    setIsModalDismissed(false);
+  }
 
   const handleInteraction = () => {
     if (sessionStatus === 'limit-reached') {
@@ -115,6 +124,22 @@ export const AetherUI = ({
       <div className="relative z-10 flex flex-col items-center justify-between h-full px-4 py-4 md:px-6 md:py-8 pb-safe">
         
         <Header uiVoiceState={uiVoiceState} />
+
+        {/* Integrated Debug Panels */}
+        {isDebugMode && (
+          <>
+            <DebugPanelLeft 
+              voiceState={voiceState}
+              permissionStatus={permissionStatus}
+              sessionStatus={sessionStatus}
+              modelCacheStatus={modelCacheStatus}
+              tokenUsage={tokenUsage}
+              onTestApi={() => chatService.testApiConnection()}
+              onSimulateInput={onSimulateInput}
+            />
+            <DebugPanelRight />
+          </>
+        )}
 
         {/* Central Orb Container */}
         <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">

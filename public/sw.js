@@ -18,15 +18,6 @@ const CACHE_DOMAINS = [
   'hf.co'
 ];
 
-// Extensions of files to cache aggressively
-const CACHE_EXTENSIONS = [
-  '.onnx',
-  '.wasm',
-  '.json',
-  '.js',
-  '.bin'
-];
-
 self.addEventListener('install', (event) => {
   // Skip waiting to activate immediately
   self.skipWaiting();
@@ -64,7 +55,7 @@ function isCacheableExternalRequest(url) {
       return true;
     }
     return false;
-  } catch (e) {
+  } catch {
     return false;
   }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { isSecureContext, isBrowserSupported } from '@/features/voice/utils/browser-support';
 
 jest.mock('@/shared/lib/logger', () => ({

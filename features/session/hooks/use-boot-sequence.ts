@@ -3,8 +3,9 @@ import { logger } from '@/shared/lib/logger';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 import { memoryService } from '@/features/memory/services/memory-service';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
-import { checkModelCache, ModelCacheStatus } from '@/features/voice/utils/model-cache';
+import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
 import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/utils/permissions';
+import { useSystemCheck } from '@/features/system/hooks/use-system-check';
 
 export interface BootSequenceState {
   permissionStatus: PermissionStatus;
@@ -20,8 +21,10 @@ interface UseBootSequenceProps {
 export function useBootSequence({ onComplete }: UseBootSequenceProps) {
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
-  const [modelCacheStatus, setModelCacheStatus] = useState<ModelCacheStatus>('checking');
   const [isBooting, setIsBooting] = useState(false);
+  
+  // Use System Check Worker
+  const { modelCacheStatus, checkCache } = useSystemCheck();
   
   const realDownloadProgressRef = useRef<number>(0);
   const isServicesReadyRef = useRef(false);
@@ -33,12 +36,10 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
           logger.debug('SESSION', 'Download progress', { progress, text });
       });
       
-      // Initial cache check
-      checkModelCache().then(status => {
-          setModelCacheStatus(status);
-          logger.info('SESSION', 'Model cache status', { status });
-      });
-  }, []);
+      // Initial cache check via worker
+      // Wait a bit for worker to init
+      setTimeout(() => checkCache(), 500);
+  }, [checkCache]);
 
   const startBootSequence = async () => {
       setIsBooting(true);
@@ -95,6 +96,27 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
               clearInterval(interval);
               // setIsBooting(false); // Removed: Keep booting state until onComplete finishes
               
+              // Poll for cache status (SW might lag behind download)
+              let attempts = 0;
+              const maxAttempts = 10;
+              const cacheInterval = setInterval(() => {
+                  attempts++;
+                  checkCache();
+                  
+                  // We rely on modelCacheStatus updating via the hook
+                  // But inside this interval closure, we can't see the updated state easily without refs or dependency
+                  // However, the worker will keep checking. 
+                  // Actually, checkCache triggers one check.
+                  
+                  if (attempts >= maxAttempts) {
+                      clearInterval(cacheInterval);
+                  }
+              }, 1000);
+              
+              // Stop polling if we see it cached (via effect on prop)
+              // We can't easily stop this interval from outside based on state change unless we use a ref for interval
+              // For simplicity, we just let it poll 10 times or until component unmounts (cleanup)
+
               // 5. Auto-Start Session
               try {
                   const granted = await permissionPromise;

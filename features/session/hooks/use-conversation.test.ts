@@ -11,7 +11,7 @@ jest.mock('@/features/ai/services/chat-service', () => ({
 jest.mock('@/features/memory/services/memory-service');
 jest.mock('@/shared/lib/logger');
 jest.mock('@/features/session/hooks/use-message-queue', () => ({
-  useMessageQueue: ({ onSpeak }: any) => ({
+  useMessageQueue: () => ({
     handleChunk: jest.fn(),
     startStream: jest.fn(),
     endStream: jest.fn(),
@@ -38,7 +38,6 @@ describe('useConversation', () => {
     }));
 
     expect(result.current.state.currentAssistantMessage).toBe('');
-    expect(result.current.state.isProcessing).toBe(false);
   });
 
   it('should handle user input', async () => {

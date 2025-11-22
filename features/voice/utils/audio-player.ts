@@ -89,7 +89,7 @@ export class AudioPlayer {
     if (this.currentSource) {
       try {
         this.currentSource.stop();
-      } catch (e) {
+      } catch {
         // Ignore errors if already stopped
       }
       this.currentSource = null;

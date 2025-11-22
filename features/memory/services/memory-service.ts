@@ -8,10 +8,9 @@
 import { logger } from '@/shared/lib/logger';
 import { embeddingService } from './embedding-service';
 import { indexedDBService } from './indexeddb-service';
-import { findTopSimilar, diversityRanking } from '../utils/vector-similarity';
+import { diversityRanking } from '../utils/vector-similarity';
 import {
   extractMemorableFacts,
-  scoreFactImportance,
 } from '../utils/memory-extractor';
 import type {
   ConversationTurn,

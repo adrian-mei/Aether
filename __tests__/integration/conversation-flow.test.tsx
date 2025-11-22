@@ -1,12 +1,12 @@
 import React from 'react';
-import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SessionContainer } from '@/features/session/components/session-container';
 import { useSessionManager } from '@/features/session/hooks/use-session-manager';
 
 // Mock dependencies
 jest.mock('@/features/session/hooks/use-session-manager');
 jest.mock('@/features/session/components/ui/background-orbs', () => ({ BackgroundOrbs: () => <div data-testid="background-orbs" /> }));
-jest.mock('@/features/session/components/ui/orb-container', () => ({ OrbContainer: ({ onInteraction }: any) => <button data-testid="orb" onClick={onInteraction}>Orb</button> }));
+jest.mock('@/features/session/components/ui/orb-container', () => ({ OrbContainer: ({ onInteraction }: { onInteraction: () => void }) => <button data-testid="orb" onClick={onInteraction}>Orb</button> }));
 jest.mock('@/features/session/components/ui/header', () => ({ Header: () => <div data-testid="header" /> }));
 jest.mock('@/features/session/components/ui/footer', () => ({ Footer: () => <div data-testid="footer" /> }));
 jest.mock('@/features/session/components/ui/status-display', () => ({ StatusDisplay: () => <div data-testid="status-display" /> }));

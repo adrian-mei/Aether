@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useVoiceAgent } from '@/features/voice/hooks/use-voice-agent';
 import { kokoroService } from '@/features/voice/services/kokoro-service';

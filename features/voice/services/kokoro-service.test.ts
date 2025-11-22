@@ -1,6 +1,5 @@
 import { KokoroService } from '@/features/voice/services/kokoro-service';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
-import { logger } from '@/shared/lib/logger';
 
 // Mock audio player
 jest.mock('@/features/voice/utils/audio-player', () => ({
@@ -22,7 +21,7 @@ jest.mock('@/shared/lib/logger', () => ({
 describe('KokoroService', () => {
   let service: KokoroService;
   let mockWorker: Worker;
-  let workerHandlers: {
+  const workerHandlers: {
     onmessage: ((event: MessageEvent) => void) | null;
     onerror: ((event: ErrorEvent) => void) | null;
   } = { onmessage: null, onerror: null };

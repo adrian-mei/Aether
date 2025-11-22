@@ -36,16 +36,12 @@ describe('useSessionAccess', () => {
     
     const { result } = renderHook(() => useSessionAccess());
     
-    // Wait for effect to read localStorage
-    // Since effect uses setTimeout(0), we might need to wait or rely on initial render logic if it was synchronous.
-    // The hook's effect runs after render.
-    
-    // To simulate "limit reached on load", we can update the state manually via increment or wait.
-    // But let's test the increment logic respecting the limit.
+    expect(result.current.state.interactionCount).toBe(10);
+    expect(result.current.state.isLimitReached).toBe(true);
     
     act(() => {
-        // Manually set count to max via multiple increments if needed, or rely on mocking localStorage before render?
-        // The hook reads localStorage in useEffect.
+        const allowed = result.current.actions.incrementInteraction();
+        expect(allowed).toBe(false);
     });
   });
 

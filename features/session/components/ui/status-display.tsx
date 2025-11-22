@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
@@ -33,6 +33,19 @@ export const StatusDisplay = ({
   const [shouldShowFeedback, setShouldShowFeedback] = useState(false);
   const [lastMessage, setLastMessage] = useState<string | undefined>(undefined);
   
+  // Derived state pattern: update state during render if props change
+  if (currentAssistantMessage && currentAssistantMessage !== lastMessage) {
+      setLastMessage(currentAssistantMessage);
+      setHasGivenFeedback(false);
+      // Logic: Only ask for feedback after 5 turns, and then randomly (30% chance)
+      // Using message length for deterministic pseudo-randomness to maintain purity
+      if (turnCount > 5) {
+          setShouldShowFeedback((currentAssistantMessage.length % 10) < 3);
+      } else {
+          setShouldShowFeedback(false);
+      }
+  }
+  
   // Calculate dynamic speed for true sync
   // We want typing to finish when audio finishes.
   // Start time: 0ms delay (Immediate).
@@ -59,21 +72,6 @@ export const StatusDisplay = ({
   // Apply typewriter effect to assistant message
   // Reduced delay from 500ms to 0ms for instant start
   const animatedAssistantMessage = useTypewriter(currentAssistantMessage, dynamicSpeed, 0);
-
-  // Reset feedback state when message changes
-  useEffect(() => {
-    if (currentAssistantMessage && currentAssistantMessage !== lastMessage) {
-      setHasGivenFeedback(false);
-      setLastMessage(currentAssistantMessage);
-      
-      // Logic: Only ask for feedback after 5 turns, and then randomly (30% chance)
-      if (turnCount > 5) {
-          setShouldShowFeedback(Math.random() < 0.3);
-      } else {
-          setShouldShowFeedback(false);
-      }
-    }
-  }, [currentAssistantMessage, lastMessage, turnCount]);
 
   const handleFeedback = (type: 'positive' | 'neutral') => {
     setHasGivenFeedback(true);

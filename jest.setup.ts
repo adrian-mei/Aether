@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import '@testing-library/jest-dom'
 import { TextEncoder, TextDecoder } from 'util';
 import { ReadableStream } from 'stream/web';
