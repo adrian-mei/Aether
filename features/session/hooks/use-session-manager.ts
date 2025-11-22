@@ -10,8 +10,9 @@ import { verifyAccessCode as verifyHash } from '@/features/rate-limit/utils/acce
 import { useMessageQueue } from '@/features/session/hooks/use-message-queue';
 import { memoryService } from '@/features/memory/services/memory-service';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
+import { checkModelCache, ModelCacheStatus } from '@/features/voice/utils/model-cache';
 
-export type SessionStatus = 'initializing' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
+export type SessionStatus = 'initializing' | 'awaiting-boot' | 'booting' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
 const MAX_INTERACTIONS = 10;
 const RESET_WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -24,9 +25,13 @@ export function useSessionManager() {
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
+  const [modelCacheStatus, setModelCacheStatus] = useState<ModelCacheStatus>('checking');
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const isServicesReadyRef = useRef(false);
   
   const historyRef = useRef<ChatMessage[]>([]);
   const speakRef = useRef<(text: string, options?: { autoResume?: boolean }) => Promise<void>>(async () => {});
+  const realDownloadProgressRef = useRef<number>(0);
   const resetRef = useRef<() => void>(() => {});
   const isProcessingRef = useRef(false);
   const lastActivityRef = useRef<number>(0);
@@ -240,11 +245,26 @@ export function useSessionManager() {
     return () => clearInterval(intervalId);
   }, [voiceState, reset]);
 
+  // Subscribe to Kokoro progress events
+  useEffect(() => {
+      kokoroService.onProgress((progress, text) => {
+          realDownloadProgressRef.current = progress;
+          // If waiting for download, update state (but handled by loop now)
+          logger.debug('SESSION', 'Download progress', { progress, text });
+      });
+  }, []);
+
   // Initialization Flow
   useEffect(() => {
     logger.info('APP', 'Session manager initializing...');
 
     async function initialize() {
+        // Check model cache in parallel
+        checkModelCache().then(status => {
+            setModelCacheStatus(status);
+            logger.info('SESSION', 'Model cache status', { status });
+        });
+
         if (!isSecureContext()) {
             setStatus('insecure-context');
             return;
@@ -265,7 +285,8 @@ export function useSessionManager() {
               setStatus('limit-reached');
               logger.info('SESSION', 'Session limit reached on startup');
           } else {
-              setStatus('idle');
+              // Instead of idle, we wait for user to tap (Trademark Boot Sequence)
+              setStatus('awaiting-boot');
           }
       }, 0);
     }
@@ -301,14 +322,78 @@ export function useSessionManager() {
     }
   }, []);
 
+  const startBootSequence = async () => {
+      if (status !== 'awaiting-boot') return;
+      
+      setStatus('booting');
+      setDownloadProgress(0);
+      logger.info('SESSION', 'Starting boot sequence');
+
+      // 1. Request Permission Immediately (User Gesture)
+      setPermissionStatus('pending');
+      // We purposefully don't await here, so animation starts. We await at the end.
+      const permissionPromise = requestMicrophonePermission();
+
+      // 2. Start initializing services
+      const initPromise = kokoroService.initialize()
+        .then(() => { isServicesReadyRef.current = true; })
+        .catch(err => {
+            logger.error('APP', 'Kokoro init failed', err);
+            isServicesReadyRef.current = true;
+        });
+      memoryService.initialize().catch(err => logger.error('APP', 'Memory init failed', err));
+      
+      // 3. Initialize audio context
+      audioPlayer.resume().catch(err => logger.warn('APP', 'Failed to resume audio context', err));
+
+      // 4. Run Animation Loop
+      const TARGET_DURATION = 8000;
+      const UPDATE_INTERVAL = 50;
+      const startTime = Date.now();
+
+      const interval = setInterval(async () => {
+          const elapsed = Date.now() - startTime;
+          let virtualProgress = (elapsed / TARGET_DURATION) * 100;
+          
+          // Wait for services at 99%
+          if (virtualProgress > 99 && !isServicesReadyRef.current) {
+              virtualProgress = 99;
+          }
+
+          if (virtualProgress > 100) virtualProgress = 100;
+          setDownloadProgress(virtualProgress);
+
+          if (virtualProgress >= 100 && isServicesReadyRef.current) {
+              clearInterval(interval);
+              
+              // 5. Auto-Start Session
+              try {
+                  const granted = await permissionPromise;
+                  if (granted) {
+                      setPermissionStatus('granted');
+                      setStatus('running');
+                      const greeting = "Hello, I am Aether. I'm here to listen, validate your feelings, and help you explore your inner world without judgment. How are you feeling right now?";
+                      setCurrentAssistantMessage(greeting);
+                      speak(greeting);
+                  } else {
+                      setPermissionStatus('denied');
+                      setStatus('idle'); // Fallback to manual start if denied
+                  }
+              } catch (e) {
+                  logger.error('SESSION', 'Auto-start failed', e);
+                  setStatus('idle');
+              }
+          }
+      }, UPDATE_INTERVAL);
+  };
+
   const handleStartSession = async () => {
     logger.info('APP', 'User clicked Start Session');
     if (status === 'unsupported' || status === 'limit-reached') return;
 
-    // Warm up services immediately on interaction
+    // Services should be initialized by boot sequence, but safety check
     kokoroService.initialize().catch(err => logger.error('APP', 'Kokoro init failed', err));
-    memoryService.initialize().catch(err => logger.error('APP', 'Memory init failed', err));
-
+    
     // Initialize/Resume AudioContext on user interaction to unlock audio on mobile
     audioPlayer.resume().catch(err => {
         logger.warn('APP', 'Failed to resume audio context', err);
@@ -373,8 +458,11 @@ export function useSessionManager() {
       voiceState,
       permissionStatus,
       currentAssistantMessage,
+      modelCacheStatus,
+      downloadProgress,
     },
     actions: {
+      startBootSequence,
       handleStartSession,
       handleInputComplete, // Exposed for debugging
       toggleListening,

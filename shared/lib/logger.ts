@@ -50,14 +50,19 @@ class AetherLogger {
         navigator.sendBeacon('/api/log', blob);
       } else {
         // Use fetch for normal flushing
+        // We don't use JSON.stringify here again because we can construct from the object directly
+        // or just use the body string. But typically fetch body takes string or blob.
+        // To avoid double stringify if we used Blob above, let's reuse it if possible, 
+        // but fetch body with Content-Type json expects string.
+        
         fetch('/api/log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ logs: logsToSend }),
-          keepalive: true // Important for page transitions
-        }).catch(err => {
-           // If fetch fails, we just lose the logs to avoid recursive error logging
-           console.error('Failed to sync logs to server', err);
+          keepalive: true 
+        }).catch(() => {
+           // Silently fail or warn to avoid console noise/recursion
+           // console.warn('Log sync skipped'); 
         });
       }
     } catch (e) {

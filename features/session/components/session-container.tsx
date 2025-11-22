@@ -17,8 +17,10 @@ export function SessionContainer() {
         voiceState={state.voiceState}
         permissionStatus={state.permissionStatus}
         sessionStatus={state.status}
+        modelCacheStatus={state.modelCacheStatus}
+        downloadProgress={state.downloadProgress}
         currentAssistantMessage={state.currentAssistantMessage}
-        onStartSession={actions.handleStartSession}
+        onStartSession={state.status === 'awaiting-boot' ? actions.startBootSequence : actions.handleStartSession}
         onToggleListening={actions.toggleListening}
         onBypass={actions.verifyAccessCode}
       />

@@ -49,6 +49,8 @@ export class KokoroService {
       onStart?: () => void;
       returnAudio?: boolean;
   } | null = null;
+  
+  private onProgressCallback: ((progress: number, text: string) => void) | null = null;
 
   private constructor() {}
 
@@ -73,6 +75,10 @@ export class KokoroService {
       logger.error('KOKORO', 'Worker error', err);
       this.handleError(err.message);
     };
+  }
+
+  public onProgress(callback: (progress: number, text: string) => void) {
+      this.onProgressCallback = callback;
   }
 
   public async initialize(): Promise<void> {
@@ -110,9 +116,17 @@ export class KokoroService {
 
   private handleWorkerMessage(event: MessageEvent) {
     if (!event.data) return;
-    const { type, voices, audio, sampleRate, error } = event.data;
+    const { type, voices, audio, sampleRate, error, data } = event.data;
 
-    if (type === 'ready') {
+    if (type === 'progress') {
+        if (this.onProgressCallback && data) {
+            // Transformers.js returns progress 0-100
+            // We might want to normalize or smooth it
+            const progress = data.progress || 0;
+            const fileName = data.file || 'model';
+            this.onProgressCallback(progress, `Downloading ${fileName}...`);
+        }
+    } else if (type === 'ready') {
         logger.info('KOKORO', 'Worker ready', { voicesCount: voices.length });
         this.isReady = true;
         this.isInitializing = false;

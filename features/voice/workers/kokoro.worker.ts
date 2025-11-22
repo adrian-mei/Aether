@@ -28,20 +28,28 @@ ctx.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       env.wasm.proxy = true; // Enable multithreading for WASM fallback
       // env.webgpu.powerPreference = "high-performance"; // Types might not exist yet in all versions
 
+      const progressCallback = (data: any) => {
+        if (data.status === 'progress') {
+          ctx.postMessage({ type: 'progress', data });
+        }
+      };
+
       try {
         // q8 quantization can cause artifacts/garbage on some WebGPU implementations
         // Switch to fp32 (or fp16) for stability with WebGPU
         tts = await KokoroTTS.from_pretrained(modelId, {
           dtype: "fp32",
           device: "webgpu",
-        });
+          progress_callback: progressCallback,
+        } as any); // Type assertion to bypass strict KokoroTTS definition if needed
         console.log('[Kokoro Worker] Initialized with WebGPU (fp32)');
       } catch (e) {
         console.warn('[Kokoro Worker] WebGPU init failed, falling back to WASM', e);
         tts = await KokoroTTS.from_pretrained(modelId, {
           dtype: "q8",
           device: "wasm",
-        });
+          progress_callback: progressCallback,
+        } as any);
       }
 
       const voices = Object.keys(tts.voices);

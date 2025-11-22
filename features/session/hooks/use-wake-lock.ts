@@ -4,9 +4,18 @@ import { logger } from '@/shared/lib/logger';
 export const useWakeLock = () => {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const [isActive, setIsActive] = useState(false);
+  const [shouldBeActive, setShouldBeActive] = useState(false);
 
   const requestWakeLock = useCallback(async () => {
+    setShouldBeActive(true);
+    
     if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      // Don't request if hidden (it will fail), wait for visibility change
+      if (document.visibilityState !== 'visible') {
+          logger.debug('WAKE_LOCK', 'Page hidden, deferring wake lock request');
+          return;
+      }
+
       try {
         const sentinel = await navigator.wakeLock.request('screen');
         wakeLockRef.current = sentinel;
@@ -17,13 +26,18 @@ export const useWakeLock = () => {
           setIsActive(false);
           logger.debug('WAKE_LOCK', 'Screen Wake Lock released');
         });
-      } catch (err) {
-        logger.error('WAKE_LOCK', 'Failed to request Wake Lock', err);
+      } catch (err: any) {
+        if (err.name === 'NotAllowedError') {
+            logger.warn('WAKE_LOCK', 'Wake Lock denied (possibly due to visibility/focus)');
+        } else {
+            logger.error('WAKE_LOCK', 'Failed to request Wake Lock', err);
+        }
       }
     }
   }, []);
 
   const releaseWakeLock = useCallback(async () => {
+    setShouldBeActive(false);
     if (wakeLockRef.current) {
       try {
         await wakeLockRef.current.release();
@@ -38,7 +52,7 @@ export const useWakeLock = () => {
   // Re-request lock if visibility changes (e.g., tab switch)
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && !wakeLockRef.current && isActive) {
+      if (document.visibilityState === 'visible' && !wakeLockRef.current && shouldBeActive) {
         await requestWakeLock();
       }
     };
@@ -47,7 +61,7 @@ export const useWakeLock = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isActive, requestWakeLock]);
+  }, [shouldBeActive, requestWakeLock]);
 
   // Cleanup on unmount
   useEffect(() => {

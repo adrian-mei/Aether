@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { VoiceAgentState } from '@/features/voice/hooks/use-voice-agent';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
 import { SessionStatus } from '../hooks/use-session-manager';
+import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
 import { Lock, Compass, AlertCircle } from 'lucide-react';
 import { WaitlistModal } from './waitlist-modal';
 import { useOceanSound } from '../hooks/use-ocean-sound';
@@ -14,6 +15,8 @@ interface AetherUIProps {
   voiceState: VoiceAgentState;
   permissionStatus: PermissionStatus;
   sessionStatus: SessionStatus;
+  modelCacheStatus: ModelCacheStatus;
+  downloadProgress: number | null;
   currentAssistantMessage?: string;
   onStartSession: () => void;
   onToggleListening: () => void;
@@ -47,6 +50,8 @@ export const AetherUI = ({
   voiceState, 
   permissionStatus, 
   sessionStatus,
+  modelCacheStatus,
+  downloadProgress,
   currentAssistantMessage,
   onStartSession, 
   onToggleListening,
@@ -85,7 +90,7 @@ export const AetherUI = ({
 
   // Map actual voiceState to UI state
   const getUIVoiceState = (): UIVoiceState => {
-    if (sessionStatus === 'initializing') return 'processing'; // Use processing animation for init
+    if (sessionStatus === 'initializing' || sessionStatus === 'booting') return 'processing'; // Use processing animation for init/boot
     if (voiceState === 'muted') return 'listening'; // Visual fallback for muted
     if (voiceState === 'permission-denied') return 'error';
     return voiceState as UIVoiceState;
@@ -166,6 +171,9 @@ export const AetherUI = ({
       setIsModalDismissed(false); // Re-open modal if dismissed
       return;
     }
+    
+    // Prevent interaction if downloading
+    if (downloadProgress !== null && downloadProgress < 100) return;
 
     if (sessionStatus === 'initializing') return; // Ignore clicks during init
 
@@ -174,7 +182,7 @@ export const AetherUI = ({
 
     if (sessionStatus === 'unsupported' || sessionStatus === 'insecure-context') return;
     
-    if (sessionStatus === 'idle') {
+    if (sessionStatus === 'idle' || sessionStatus === 'awaiting-boot') {
       onStartSession();
     } else {
       onToggleListening();
@@ -221,8 +229,31 @@ export const AetherUI = ({
     if (sessionStatus === 'limit-reached') {
         return { text: 'Session Limit', subtext: 'Thank you for visiting' };
     }
+    
+    // Handle Gamified Download State
+    if (downloadProgress !== null && downloadProgress < 100) {
+         let text = "Initializing...";
+         if (downloadProgress < 20) text = "Establishing Neural Link...";
+         else if (downloadProgress < 40) text = "Downloading Voice Patterns...";
+         else if (downloadProgress < 60) text = "Calibrating Empathy Engine...";
+         else if (downloadProgress < 80) text = "Allocating WebGPU Buffers...";
+         else text = "Synthesizing Emotional Tones...";
+
+        return {
+            text: text,
+            subtext: `${Math.round(downloadProgress)}% Complete`
+        };
+    }
+
     if (sessionStatus === 'initializing') {
-        return { text: 'Waking Up', subtext: 'Preparing voice engine...' };
+        return { text: 'Waking Up', subtext: 'Checking resources...' };
+    }
+    
+    if (sessionStatus === 'awaiting-boot') {
+        return { 
+            text: 'Tap to Initialize', 
+            subtext: modelCacheStatus === 'missing' ? 'Download Engine (300MB)' : 'System Boot Sequence' 
+        };
     }
 
     const messages: Record<string, { text: string; subtext: string }> = {
@@ -397,6 +428,33 @@ export const AetherUI = ({
               <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-emerald-300/10 to-transparent opacity-50" />
               <div className="absolute inset-0 bg-gradient-radial from-center from-white/5 to-transparent" />
               
+              {/* Liquid Fill Animation (Gamified Download) */}
+              {downloadProgress !== null && downloadProgress < 100 && (
+                <div 
+                    className="absolute bottom-0 left-0 right-0 bg-teal-400/40 backdrop-blur-sm transition-all duration-300 ease-out flex items-center justify-center overflow-hidden z-10"
+                    style={{ height: `${downloadProgress}%` }}
+                >
+                    <div className="w-full h-[2px] bg-teal-300/70 absolute top-0 animate-pulse" />
+                    {/* Bubbles effect */}
+                    <div className="absolute inset-0">
+                         {[...Array(3)].map((_, i) => (
+                            <div 
+                                key={i}
+                                className="absolute bg-teal-300/30 rounded-full animate-floatSmooth"
+                                style={{
+                                    width: Math.random() * 20 + 10 + 'px',
+                                    height: Math.random() * 20 + 10 + 'px',
+                                    left: Math.random() * 100 + '%',
+                                    bottom: '-20px',
+                                    animationDuration: Math.random() * 2 + 2 + 's',
+                                    animationDelay: Math.random() * 1 + 's'
+                                }}
+                            />
+                         ))}
+                    </div>
+                </div>
+              )}
+
               {/* Error/Status Icons Overlay */}
               {sessionStatus === 'insecure-context' && (
                 <div className="absolute inset-0 flex items-center justify-center z-20">
