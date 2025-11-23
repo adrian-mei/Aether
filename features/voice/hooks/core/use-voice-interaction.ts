@@ -3,6 +3,7 @@ import { logger } from '@/shared/lib/logger';
 import { useSpeechRecognition } from '../recognition/use-speech-recognition';
 import { useTTS } from '../synthesis/use-tts';
 import { audioPlayer } from '@/features/voice/utils/audio-player';
+import type { VoiceMode } from '@/features/session/hooks/use-session-manager';
 
 export type VoiceInteractionState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
 
@@ -11,7 +12,7 @@ export interface VoiceEvent {
     payload?: string | number;
 }
 
-export function useVoiceInteraction() {
+export function useVoiceInteraction(voiceMode: VoiceMode = 'neural') {
   // Explicit overrides for states that cannot be purely derived from sub-hooks
   const [manualState, setManualState] = useState<'processing' | 'muted' | null>(null);
   
@@ -45,7 +46,7 @@ export function useVoiceInteraction() {
     isSpeaking, 
     speak: speakTTS, 
     stop: stopTTS 
-  } = useTTS();
+  } = useTTS(voiceMode);
 
   const wasListeningRef = useRef(false);
 

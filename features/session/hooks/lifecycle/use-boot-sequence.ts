@@ -6,6 +6,7 @@ import { audioPlayer } from '@/features/voice/utils/audio-player';
 import { ModelCacheStatus } from '@/features/voice/utils/model-cache';
 import { requestMicrophonePermission, PermissionStatus } from '@/features/voice/utils/permissions';
 import { useSystemCheck } from '@/features/system/hooks/use-system-check';
+import type { VoiceMode } from '@/features/session/hooks/use-session-manager';
 
 export interface BootSequenceState {
   permissionStatus: PermissionStatus;
@@ -15,10 +16,11 @@ export interface BootSequenceState {
 }
 
 interface UseBootSequenceProps {
+  voiceMode: VoiceMode;
   onComplete: (granted: boolean) => Promise<void>;
 }
 
-export function useBootSequence({ onComplete }: UseBootSequenceProps) {
+export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps) {
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [isBooting, setIsBooting] = useState(false);
@@ -52,12 +54,23 @@ export function useBootSequence({ onComplete }: UseBootSequenceProps) {
       const permissionPromise = requestMicrophonePermission();
 
       // 2. Start initializing services
-      kokoroService.initialize()
-        .then(() => { isServicesReadyRef.current = true; })
-        .catch(err => {
-            logger.error('APP', 'Kokoro init failed', err);
-            isServicesReadyRef.current = true;
-        });
+      if (voiceMode === 'neural') {
+          kokoroService.initialize()
+            .then(() => { isServicesReadyRef.current = true; })
+            .catch(err => {
+                logger.error('APP', 'Kokoro init failed', err);
+                isServicesReadyRef.current = true;
+            });
+      } else {
+          // In native mode, we skip the heavy model load
+          logger.info('SESSION', 'Skipping Kokoro init (Native Mode)');
+          isServicesReadyRef.current = true;
+          // Immediately jump progress
+          setTimeout(() => {
+              realDownloadProgressRef.current = 100;
+          }, 100);
+      }
+
       memoryService.initialize().catch(err => logger.error('APP', 'Memory init failed', err));
       
       // 3. Initialize audio context

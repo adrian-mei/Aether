@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { logger, LogEntry } from '@/shared/lib/logger';
-import { Search, Trash2, Copy, Check, ChevronRight, ChevronDown, Filter } from 'lucide-react';
+import { Search, Trash2, Copy, Check, ChevronRight, ChevronDown, Filter, Zap, Sparkles } from 'lucide-react';
+import { useSession } from '@/features/session/context/session-context';
 
 export function DebugPanelRight() {
+  const { state: { voiceMode }, actions: { toggleVoiceMode } } = useSession();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   // Lazy init state from localStorage
   const [showVerbose, setShowVerbose] = useState(() => {
@@ -91,6 +93,21 @@ export function DebugPanelRight() {
         </div>
         
         <div className="flex items-center gap-1">
+            <button
+                onClick={toggleVoiceMode}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-colors ${
+                    voiceMode === 'neural'
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                }`}
+                title={voiceMode === 'neural' ? "Using High Quality AI Voice" : "Using Fast System Voice"}
+            >
+                {voiceMode === 'neural' ? <Sparkles size={12} /> : <Zap size={12} />}
+                {voiceMode === 'neural' ? 'HQ' : 'LITE'}
+            </button>
+
+            <div className="h-4 w-[1px] bg-white/10 mx-1" />
+
             <button 
                 onClick={() => setShowVerbose(!showVerbose)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold tracking-wider transition-colors ${

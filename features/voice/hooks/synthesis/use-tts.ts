@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { logger } from '@/shared/lib/logger';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
+import type { VoiceMode } from '@/features/session/hooks/use-session-manager';
 
-export function useTTS() {
+export function useTTS(voiceMode: VoiceMode = 'neural') {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
   
@@ -57,39 +58,39 @@ export function useTTS() {
     // The `stop()` method is available for explicit cancellation.
     
     // setIsSpeaking(true); // Delayed until actual playback starts
-    logger.info('VOICE', 'Requesting speech', { textLength: text.length, pipeline: !options.waitForPlayback });
+    logger.info('VOICE', 'Requesting speech', { textLength: text.length, pipeline: !options.waitForPlayback, mode: voiceMode });
 
-    try {
-        // Kokoro (Primary)
-        const voiceId = 'af_heart';
-        
-        // Force cast to avoid TS confusion about Promise nesting
-        const playbackPromise = (await kokoroService.speak(
-            text, 
-            voiceId,
-            (duration: number) => {
-                setIsSpeaking(true);
-                if (options.onStart) options.onStart(duration);
+    // Priority 1: Kokoro (Neural)
+    if (voiceMode === 'neural') {
+        try {
+            const voiceId = 'af_heart';
+            
+            // Force cast to avoid TS confusion about Promise nesting
+            const playbackPromise = (await kokoroService.speak(
+                text, 
+                voiceId,
+                (duration: number) => {
+                    setIsSpeaking(true);
+                    if (options.onStart) options.onStart(duration);
+                }
+            )) as unknown as Promise<void>;
+            
+            if (playbackPromise) {
+                if (options.waitForPlayback !== false) {
+                    await playbackPromise;
+                    setIsSpeaking(false);
+                    if (onComplete) onComplete();
+                } else {
+                    // Pipeline Mode: Don't await playback.
+                    playbackPromise.then(() => {
+                        if (onComplete) onComplete();
+                    });
+                }
             }
-        )) as unknown as Promise<void>;
-        
-        if (playbackPromise) {
-            if (options.waitForPlayback !== false) {
-                 await playbackPromise;
-                 setIsSpeaking(false);
-                 if (onComplete) onComplete();
-            } else {
-                 // Pipeline Mode: Don't await playback.
-                 // We attach onComplete to the promise but resolve speak() immediately.
-                 playbackPromise.then(() => {
-                     if (onComplete) onComplete();
-                 });
-            }
+            return;
+        } catch (e) {
+            logger.error('VOICE', 'Kokoro failed, falling back to Web Speech', e as Error);
         }
-        
-        return;
-    } catch (e) {
-        logger.error('VOICE', 'Kokoro failed, falling back to Web Speech', e as Error);
     }
 
     // Fallback: Web Speech API
