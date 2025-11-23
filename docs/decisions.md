@@ -57,3 +57,12 @@ This document tracks granular configuration decisions, parameter tuning, and "mi
 ### Boot Sequence Timeout
 *   **Value**: `10000ms` (10s).
 *   **Reasoning**: Increased to accommodate slower device initialization or manual overrides where a user might force Neural voice on a slower device.
+
+## 5. Infrastructure & Hosting
+
+### Backend Strategy
+*   **Decision**: **Self-Hosted Hybrid**. The app is designed to run on a **Persistent VPS** (e.g., Oracle Cloud Always Free) rather than pure Serverless (Vercel/Netlify).
+*   **Reasoning**:
+    *   **Mobile Limitations**: Mobile browsers cannot reliably run heavy WASM models (Kokoro 82M) without crashing or draining battery.
+    *   **Serverless Limits**: Standard serverless functions (Lambda) have size limits (50MB) and cold start penalties that make hosting AI models impractical.
+    *   **Solution**: A persistent Node.js server keeps the AI model loaded in RAM (using `onnxruntime-node`), allowing for instant, high-quality TTS generation for mobile clients via the `/api/tts` endpoint.
