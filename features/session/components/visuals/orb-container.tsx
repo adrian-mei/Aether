@@ -76,7 +76,7 @@ export const OrbContainer = ({
           style={{
             transform: `scale(${uiVoiceState === 'listening' ? 1.08 : uiVoiceState === 'speaking' ? 1.05 : 1})`,
           }}
-          aria-label={sessionStatus === 'idle' ? "Start Session" : "Toggle Listening"}
+          aria-label={(sessionStatus === 'idle' || sessionStatus === 'awaiting-boot') ? "Start Session" : "Toggle Listening"}
         >
           {/* Inner gradient layers for depth */}
           <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-emerald-300/10 to-transparent opacity-50" />

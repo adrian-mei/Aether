@@ -71,6 +71,14 @@ export const AetherUI = () => {
     // Critical: Unlock Audio Context immediately on user interaction
     audioPlayer.resume().catch(console.error);
 
+    // Critical: Unlock Web Speech API (iOS Safari)
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+        // Play a tiny silence to unlock the synthesis engine
+        const silentUtterance = new SpeechSynthesisUtterance('');
+        silentUtterance.volume = 0;
+        window.speechSynthesis.speak(silentUtterance);
+    }
+
     if (state.status === 'limit-reached') {
       setIsModalDismissed(false); // Re-open modal if dismissed
       return;
