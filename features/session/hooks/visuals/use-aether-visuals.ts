@@ -128,11 +128,16 @@ export function useAetherVisuals({
     const messages: Record<string, { text: string; subtext: string }> = {
       idle: { text: 'Ready to listen', subtext: 'Tap to begin' },
       listening: { text: 'I\'m listening', subtext: 'Go ahead, it\'s your turn' },
-      processing: { text: 'Reflecting', subtext: 'Taking in your words' },
+      processing: { text: 'Thinking...', subtext: 'Formulating response' },
       speaking: { text: 'Here with you', subtext: 'Let me mirror that back' },
       muted: { text: 'Paused', subtext: 'Tap to resume' },
       error: { text: 'Connection Issue', subtext: 'Tap to retry' },
     };
+
+    // Special Case: Initial Greeting Generation (No context yet)
+    if (uiVoiceState === 'processing' && !transcript && !lastMessage && !currentAssistantMessage) {
+        return { text: 'Waking Up...', subtext: 'Generating Voice Model...' };
+    }
 
     // User Input Overlay
     if ((uiVoiceState === 'listening' || uiVoiceState === 'processing') && transcript) {

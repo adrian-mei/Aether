@@ -53,21 +53,24 @@ export function useInteractionLoop({
       }
   }, [voice.silenceDetected]);
 
-  // Watchdog for timeout (30s no activity)
+  // Watchdog for timeout (60s processing hang)
+  // We track duration of the *current* processing state, not last conversation activity
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     if (voice.state === 'processing') {
+      const processingStart = Date.now();
+      
       intervalId = setInterval(() => {
-        const elapsed = Date.now() - conversation.actions.getLastActivity();
-        // 30 seconds timeout
-        if (elapsed > 30000) {
-          logger.warn('SESSION', 'Request timed out (no activity)', { elapsedMs: elapsed });
+        const elapsed = Date.now() - processingStart;
+        
+        // 60 seconds timeout (increased for slow mobile WASM generation)
+        if (elapsed > 60000) {
+          logger.warn('SESSION', 'Request timed out (processing hang)', { elapsedMs: elapsed });
           voice.reset();
           logger.info('SESSION', 'Chat ended (watchdog timeout)');
-          // Optionally notify user or just reset state
         }
       }, 1000);
     }
     return () => clearInterval(intervalId);
-  }, [voice.state, voice.reset, conversation.actions]);
+  }, [voice.state, voice.reset]);
 }

@@ -21,7 +21,7 @@ export function useConversation({
 }: UseConversationProps) {
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
   const [currentMessageDuration, setCurrentMessageDuration] = useState<number>(0);
-  const lastActivityRef = useRef<number>(0);
+  const lastActivityRef = useRef<number>(Date.now()); // Initialize to now to prevent immediate timeout
 
   // 1. History Management
   const history = useChatHistory();

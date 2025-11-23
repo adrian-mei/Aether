@@ -29,13 +29,13 @@ export const IOSInstallPrompt = () => {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-6 left-4 right-4 z-50 animate-slide-up">
+    <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-50 animate-slide-up">
       <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl relative">
         <button 
           onClick={handleDismiss}
-          className="absolute top-2 right-2 p-1 text-white/40 hover:text-white/80 transition-colors"
+          className="absolute top-2 right-2 p-2 text-white/40 hover:text-white/80 transition-colors"
         >
-          <X size={16} />
+          <X size={20} />
         </button>
         
         <div className="flex items-start gap-4 pr-6">

@@ -2,7 +2,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import { logger } from '@/shared/lib/logger';
 
 interface UseMessageQueueProps {
-  onSpeak: (text: string, options: { autoResume?: boolean }) => Promise<void>;
+  onSpeak: (text: string, options: { autoResume?: boolean; waitForPlayback?: boolean }) => Promise<void>;
 }
 
 export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
@@ -22,7 +22,8 @@ export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
              logger.debug('QUEUE', 'Flushing buffer remainder', { text });
              bufferRef.current = '';
              isSpeakingRef.current = true;
-             await onSpeak(text, { autoResume: true });
+             // Last chunk must wait for playback
+             await onSpeak(text, { autoResume: true, waitForPlayback: true });
              isSpeakingRef.current = false;
         }
         return;
@@ -35,7 +36,11 @@ export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
     const isLast = !isStreamActiveRef.current && queueRef.current.length === 0 && !bufferRef.current.trim();
     
     logger.debug('QUEUE', 'Processing sentence', { text, isLast });
-    await onSpeak(text, { autoResume: isLast });
+    
+    // Pipeline Optimization:
+    // If it's NOT the last chunk, we don't wait for playback to finish.
+    // This allows the engine to start generating the next chunk immediately.
+    await onSpeak(text, { autoResume: isLast, waitForPlayback: isLast });
     
     isSpeakingRef.current = false;
     processQueueRef.current();

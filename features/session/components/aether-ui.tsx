@@ -9,6 +9,7 @@ import { useAetherVisuals } from '../hooks/visuals/use-aether-visuals';
 import { useSessionAudio } from '../hooks/audio/use-session-audio';
 import { useOnlineStatus } from '@/shared/hooks/use-online-status';
 import { useSession } from '../context/session-context';
+import { audioPlayer } from '@/features/voice/utils/audio-player';
 
 // Sub-components
 import { Header } from './layouts/header';
@@ -20,6 +21,7 @@ import { DebugPanelLeft } from './debug/debug-panel-left';
 import { DebugPanelRight } from './debug/debug-panel-right';
 import { LandscapeWarning } from './layouts/landscape-warning';
 import { IOSInstallPrompt } from './modals/ios-install-prompt';
+import { MobileSupportNotice } from './modals/mobile-support-notice';
 
 export const AetherUI = () => {
   const { state, actions } = useSession();
@@ -66,6 +68,17 @@ export const AetherUI = () => {
   }
 
   const handleInteraction = () => {
+    // Critical: Unlock Audio Context immediately on user interaction
+    audioPlayer.resume().catch(console.error);
+
+    // Critical: Unlock Web Speech API (iOS Safari)
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+        // Play a tiny silence to unlock the synthesis engine
+        const silentUtterance = new SpeechSynthesisUtterance('');
+        silentUtterance.volume = 0;
+        window.speechSynthesis.speak(silentUtterance);
+    }
+
     if (state.status === 'limit-reached') {
       setIsModalDismissed(false); // Re-open modal if dismissed
       return;
@@ -101,6 +114,7 @@ export const AetherUI = () => {
     <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none pt-safe">
       <LandscapeWarning />
       <IOSInstallPrompt />
+      <MobileSupportNotice />
       
       <WaitlistModal 
         isOpen={state.status === 'limit-reached' && !isModalDismissed} 
@@ -142,6 +156,9 @@ export const AetherUI = () => {
               sessionStatus={state.status}
               modelCacheStatus={state.modelCacheStatus}
               tokenUsage={state.tokenUsage}
+              voiceMode={state.voiceMode}
+              isDownloadingNeural={state.isDownloadingNeural}
+              onToggleVoiceMode={actions.toggleVoiceMode}
               onTestApi={() => chatService.testApiConnection()}
               onSimulateInput={actions.handleInputComplete}
             />
@@ -157,6 +174,7 @@ export const AetherUI = () => {
                 permissionStatus={state.permissionStatus}
                 emotionalTone={emotionalTone}
                 downloadProgress={state.downloadProgress}
+                bootStatus={state.bootStatus}
                 onInteraction={handleInteraction}
             />
 

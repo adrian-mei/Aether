@@ -51,6 +51,23 @@ npm run dev
 npm run build && npm start
 ```
 
+### Testing (Mobile E2E)
+
+Automated mobile workflow tests using Playwright.
+
+1.  Install browsers:
+    ```bash
+    npx playwright install
+    ```
+2.  Run tests:
+    ```bash
+    npx playwright test
+    ```
+3.  View Report:
+    ```bash
+    npx playwright show-report
+    ```
+
 ## ⚡ Performance
 
 *   **Lighthouse**: 84/100 (Production)

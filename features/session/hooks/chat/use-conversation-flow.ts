@@ -25,9 +25,19 @@ export function useConversationFlow({
     // Return a promise that resolves when audio STARTS, not ends.
     // This allows the boot sequence to complete (removing loading screen) exactly when speaking begins.
     return new Promise<void>((resolveStart) => {
+        // Safety timeout: If audio doesn't start within 10s (e.g. slow WASM generation), 
+        // we force the app to continue so the user isn't stuck at loading screen.
+        const timeoutId = setTimeout(() => {
+            logger.warn('FLOW', 'Greeting audio start timed out - forcing continuation');
+            injectAssistantMessage(greeting); // Ensure text is shown even if audio failed
+            startListening(); // Start listening so user can speak
+            resolveStart(); 
+        }, 10000);
+
         onSpeak(greeting, {
             autoResume: true, // Ensure we auto-listen after greeting
             onStart: () => {
+                clearTimeout(timeoutId);
                 logger.info('FLOW', 'Greeting audio started');
                 injectAssistantMessage(greeting);
                 resolveStart(); // Signal boot completion here
@@ -37,6 +47,7 @@ export function useConversationFlow({
             setStage('main-loop');
             logger.info('FLOW', 'Transitioned to Main Loop');
         }).catch(error => {
+            clearTimeout(timeoutId);
             logger.error('FLOW', 'Error during introduction', error);
             // Fallback: try to listen anyway
             startListening();

@@ -5,6 +5,7 @@ import { audioPlayer } from '@/features/voice/utils/audio-player';
 import { logger } from '@/shared/lib/logger';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 import { memoryService } from '@/features/memory/services/memory-service';
+import { isLowEndDevice } from '@/features/system/utils/device-capabilities';
 
 import { useSessionAccess } from './access/use-session-access';
 import { useBootSequence } from './lifecycle/use-boot-sequence';
@@ -14,15 +15,21 @@ import { useInteractionLoop } from './logic/use-interaction-loop';
 
 export type SessionStatus = 'initializing' | 'awaiting-boot' | 'booting' | 'idle' | 'running' | 'unsupported' | 'insecure-context' | 'limit-reached';
 
+export type VoiceMode = 'native' | 'neural';
+
 export function useSessionManager() {
   const [status, setStatus] = useState<SessionStatus>('initializing');
   const [isDebugOpen, setIsDebugOpen] = useState(false);
+  // Default to native on low-end devices to save bandwidth/startup time
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>('neural'); 
+  const [isDownloadingNeural, setIsDownloadingNeural] = useState(false);
   
   // 1. Session Access & Limits
   const access = useSessionAccess();
 
   // 2. Boot Sequence
   const boot = useBootSequence({
+    voiceMode,
     onComplete: async (granted) => {
       if (granted) {
         setStatus('running');
@@ -35,7 +42,7 @@ export function useSessionManager() {
   });
 
   // 3. Voice Agent
-  const voice = useVoiceInteraction();
+  const voice = useVoiceInteraction(voiceMode);
   const { 
     state: voiceState,
     transcript,
@@ -89,6 +96,12 @@ export function useSessionManager() {
   useEffect(() => {
     logger.info('APP', 'Session manager initializing...');
 
+    // Check device capabilities
+    if (isLowEndDevice()) {
+        logger.info('APP', 'Low-end device detected, defaulting to Native Voice');
+        setVoiceMode('native');
+    }
+
     async function initialize() {
         if (!isSecureContext()) {
             setStatus('insecure-context');
@@ -117,7 +130,10 @@ export function useSessionManager() {
     if (status === 'unsupported' || access.state.isLimitReached) return;
 
     // Services init (Pre-warm workers)
-    kokoroService.initialize().catch(err => logger.error('APP', 'Kokoro init failed', err));
+    // Only init Kokoro if we are in neural mode
+    if (voiceMode === 'neural') {
+        kokoroService.initialize().catch(err => logger.error('APP', 'Kokoro init failed', err));
+    }
     memoryService.initialize().catch(err => logger.error('APP', 'Memory init failed', err));
     audioPlayer.resume().catch(err => logger.warn('APP', 'Failed to resume audio context', err));
 
@@ -156,16 +172,47 @@ export function useSessionManager() {
     setTimeout(() => setIsDebugOpen(isEnabled), 0);
   }, []);
 
+  const toggleVoiceMode = () => {
+      if (voiceMode === 'native') {
+          // Switching TO Neural
+          if (kokoroService.isReady) {
+              setVoiceMode('neural');
+              logger.info('APP', 'Switched to Neural Voice (Ready)');
+          } else {
+              // Trigger download
+              logger.info('APP', 'Triggering Neural Voice Download');
+              setIsDownloadingNeural(true);
+              kokoroService.initialize()
+                  .then(() => {
+                      setIsDownloadingNeural(false);
+                      setVoiceMode('neural');
+                      logger.info('APP', 'Neural Voice Downloaded & Enabled');
+                  })
+                  .catch(err => {
+                      setIsDownloadingNeural(false);
+                      logger.error('APP', 'Neural Voice Download Failed', err);
+                  });
+          }
+      } else {
+          // Switching TO Native
+          setVoiceMode('native');
+          logger.info('APP', 'Switched to Native Voice');
+      }
+  };
+
   return {
     state: {
       status: boot.state.isBooting ? 'booting' : (access.state.isLimitReached ? 'limit-reached' : status),
       isDebugOpen,
+      voiceMode,
+      isDownloadingNeural,
       voiceState,
       permissionStatus: boot.state.permissionStatus,
       currentAssistantMessage: conversation.state.currentAssistantMessage,
       currentMessageDuration: conversation.state.currentMessageDuration,
       modelCacheStatus: boot.state.modelCacheStatus,
       downloadProgress: boot.state.downloadProgress,
+      bootStatus: boot.state.bootStatus,
       transcript,
       turnCount: conversation.state.turnCount,
       tokenUsage: conversation.state.tokenUsage,
@@ -176,6 +223,7 @@ export function useSessionManager() {
       handleInputComplete: conversation.actions.handleInputComplete,
       toggleListening,
       toggleDebug,
+      toggleVoiceMode,
       toggleMute,
       onRetryPermission: boot.actions.retryPermission,
       verifyAccessCode: access.actions.verifyAccessCode,

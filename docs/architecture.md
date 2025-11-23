@@ -51,6 +51,14 @@ Manages audio input and output:
 -   **Wake Lock**: Keeps the screen active during sessions.
 -   **Offline Support**: Blocks interactions and updates UI when network is lost.
 -   **Lifecycle Management**: Pauses audio/recognition when the app is backgrounded to save battery and prevent crashes.
+-   **Responsive Layouts**: Mobile-first design with full-screen overlays for settings (`DebugPanelLeft`) and safe-area awareness (`env(safe-area-inset-bottom)`).
+
+## Quality Assurance
+
+### Testing Strategy
+-   **E2E Testing**: Uses **Playwright** to simulate mobile and desktop environments.
+-   **Mobile Emulation**: Specifically targets iPhone viewports to verify layout, touch targets, and Install PWA prompts.
+-   **Coverage**: Critical user flows including Session Start, Settings Panel interaction, and Mobile Support notices.
 
 ## Data Flow
 
