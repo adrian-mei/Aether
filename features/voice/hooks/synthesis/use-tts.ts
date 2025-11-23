@@ -14,36 +14,79 @@ export function useTTS() {
     };
   }, []);
 
-  const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: (duration: number) => void } = { autoResume: true }, onComplete?: () => void) => {
+  const speak = useCallback(async (text: string, options: { autoResume?: boolean; waitForPlayback?: boolean; onStart?: (duration: number) => void } = { autoResume: true, waitForPlayback: true }, onComplete?: () => void) => {
     // Interruption handling
     if (synth?.speaking) {
         logger.info('VOICE', 'Interrupting current speech');
         synth.cancel();
     }
-    kokoroService.stop();
-
+    // Only hard stop if we are strictly interrupting (not pipelining)
+    // But for now, we keep it safe.
+    // Note: Pipelining relies on KokoroService not breaking when stop() is called?
+    // Actually, useMessageQueue ensures serial execution of generation.
+    // If we call stop() here, it might kill the previous sentence if it's still playing!
+    // But useTTS is called per sentence.
+    // If we pipeline, we call speak() for S2 while S1 is playing.
+    // If we call stop(), S1 stops. That's bad.
+    // But wait, useMessageQueue manages the stream.
+    // It only calls speak() when it wants to add to the stream.
+    // It shouldn't stop previous audio?
+    // Ah, `kokoroService.stop()` clears the audio player queue!
+    // So calling `speak` for S2 kills S1 playback if we call `stop()` here.
+    
+    // FIX: We should NOT call stop() if we are pipelining (i.e., part of a stream).
+    // But `useTTS` doesn't know if it's a stream.
+    // We can infer from `waitForPlayback`?
+    // If `waitForPlayback` is false, it implies we are streaming chunks.
+    // But the *next* chunk calling `speak` will kill the previous one?
+    // YES.
+    
+    // We need to remove `kokoroService.stop()` from here if we want pipelining to work across multiple calls.
+    // But we need `stop()` if the user interrupts.
+    // `useTTS` is stateful `isSpeaking`.
+    // The caller (`useVoiceInteraction` -> `speak`) handles interruption by calling `stopSR`.
+    // `useVoiceInteraction` doesn't explicitly call `stopTTS` before `speak`.
+    
+    // If we remove `kokoroService.stop()`, we risk overlapping audio if called rapidly?
+    // `AudioPlayer` queues audio. So they will play sequentially.
+    // This is exactly what we want for pipelining!
+    // So removing `kokoroService.stop()` is correct for sequential playback.
+    // But we need a way to cancel. `stop()` method handles cancellation.
+    
+    // So, let's remove `kokoroService.stop()` from the start of `speak`.
+    // The `stop()` method is available for explicit cancellation.
+    
     // setIsSpeaking(true); // Delayed until actual playback starts
-    logger.info('VOICE', 'Requesting speech', { textLength: text.length });
+    logger.info('VOICE', 'Requesting speech', { textLength: text.length, pipeline: !options.waitForPlayback });
 
     try {
         // Kokoro (Primary)
         const voiceId = 'af_heart';
         
-        const playbackPromise = await kokoroService.speak(
+        // Force cast to avoid TS confusion about Promise nesting
+        const playbackPromise = (await kokoroService.speak(
             text, 
             voiceId,
             (duration: number) => {
                 setIsSpeaking(true);
                 if (options.onStart) options.onStart(duration);
             }
-        );
+        )) as unknown as Promise<void>;
         
-        if (playbackPromise !== undefined) {
-            await playbackPromise;
+        if (playbackPromise) {
+            if (options.waitForPlayback !== false) {
+                 await playbackPromise;
+                 setIsSpeaking(false);
+                 if (onComplete) onComplete();
+            } else {
+                 // Pipeline Mode: Don't await playback.
+                 // We attach onComplete to the promise but resolve speak() immediately.
+                 playbackPromise.then(() => {
+                     if (onComplete) onComplete();
+                 });
+            }
         }
         
-        setIsSpeaking(false);
-        if (onComplete) onComplete();
         return;
     } catch (e) {
         logger.error('VOICE', 'Kokoro failed, falling back to Web Speech', e as Error);
