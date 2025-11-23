@@ -9,6 +9,7 @@ import { useAetherVisuals } from '../hooks/visuals/use-aether-visuals';
 import { useSessionAudio } from '../hooks/audio/use-session-audio';
 import { useOnlineStatus } from '@/shared/hooks/use-online-status';
 import { useSession } from '../context/session-context';
+import { audioPlayer } from '@/features/voice/utils/audio-player';
 
 // Sub-components
 import { Header } from './layouts/header';
@@ -67,6 +68,9 @@ export const AetherUI = () => {
   }
 
   const handleInteraction = () => {
+    // Critical: Unlock Audio Context immediately on user interaction
+    audioPlayer.resume().catch(console.error);
+
     if (state.status === 'limit-reached') {
       setIsModalDismissed(false); // Re-open modal if dismissed
       return;
