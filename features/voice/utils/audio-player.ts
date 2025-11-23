@@ -42,6 +42,11 @@ export class AudioPlayer {
     if (!this.audioContext) {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioContext = new AudioContextClass();
+      
+      // Monitor State Changes (Interruption recovery)
+      this.audioContext.onstatechange = () => {
+          logger.info('AUDIO', `Context state changed to: ${this.audioContext?.state}`);
+      };
     }
     return this.audioContext;
   }

@@ -24,9 +24,8 @@ export const checkDeviceCapabilities = () => {
 };
 
 export const isLowEndDevice = () => {
-    const { isMobile, hasWebGPU, hardwareConcurrency } = checkDeviceCapabilities();
-    // Consider low end if:
-    // 1. Mobile AND No WebGPU (iPhone/Older Android)
-    // 2. Low core count (< 4)
-    return (isMobile && !hasWebGPU) || hardwareConcurrency < 4;
+    const { hardwareConcurrency } = checkDeviceCapabilities();
+    // Relaxed check: We assume modern mobiles (iPhone 11+) can handle Neural Voice (via WASM if needed).
+    // We only fallback to native if the CPU is very limited (< 4 cores).
+    return hardwareConcurrency < 4;
 };

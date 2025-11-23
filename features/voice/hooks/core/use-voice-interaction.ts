@@ -93,10 +93,8 @@ export function useVoiceInteraction(voiceMode: VoiceMode = 'neural') {
             wasListeningRef.current = false;
         }
         
-        // Stop speaking on background to prevent battery drain/quirks
-        if (isSpeaking) {
-             stopTTS();
-        }
+        // Allow TTS to continue in background (Podcast/Phone call style)
+        // if (isSpeaking) { stopTTS(); } 
       } else {
         // App foregrounded
         logger.info('VOICE', 'App foregrounded');
