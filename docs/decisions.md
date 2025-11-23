@@ -43,3 +43,17 @@ This document tracks granular configuration decisions, parameter tuning, and "mi
 ### Audio Pipeline
 *   **Eager Loading**: Kokoro is initialized immediately on page load (`useEffect` in `useVoiceAgent`), not waiting for the first interaction.
 *   **Reasoning**: Minimizes the "Time to First Audio" (TTFA) for the first response.
+
+## 4. Mobile & Cross-Platform Strategy
+
+### iOS Audio Unlock
+*   **Mechanism**: Synchronous silent utterance (`SpeechSynthesisUtterance`) + AudioContext resume on first touch.
+*   **Reasoning**: iOS Safari aggressively blocks audio playback unless triggered directly by a user gesture. The silent utterance warms up the TTS engine, preventing subsequent failures.
+
+### Mobile Device Capability Check
+*   **Rule**: Mobile devices WITHOUT WebGPU default to **Native (System) Voice**.
+*   **Reasoning**: Running the 82M parameter Kokoro model on CPU (via WASM) on mobile devices proved too slow (>10s latency), leading to timeouts and poor UX. WebGPU is required for acceptable neural performance on mobile.
+
+### Boot Sequence Timeout
+*   **Value**: `10000ms` (10s).
+*   **Reasoning**: Increased to accommodate slower device initialization or manual overrides where a user might force Neural voice on a slower device.

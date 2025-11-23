@@ -17,7 +17,8 @@ export function useTTS(voiceMode: VoiceMode = 'neural') {
 
   const speak = useCallback(async (text: string, options: { autoResume?: boolean; waitForPlayback?: boolean; onStart?: (duration: number) => void } = { autoResume: true, waitForPlayback: true }, onComplete?: () => void) => {
     // Interruption handling
-    if (synth?.speaking) {
+    // Only cancel if we are NOT pipelining (waitForPlayback !== false)
+    if (synth?.speaking && options.waitForPlayback !== false) {
         logger.info('VOICE', 'Interrupting current speech');
         synth.cancel();
     }
