@@ -212,6 +212,7 @@ export function useSessionManager() {
       currentMessageDuration: conversation.state.currentMessageDuration,
       modelCacheStatus: boot.state.modelCacheStatus,
       downloadProgress: boot.state.downloadProgress,
+      bootStatus: boot.state.bootStatus,
       transcript,
       turnCount: conversation.state.turnCount,
       tokenUsage: conversation.state.tokenUsage,

@@ -13,6 +13,7 @@ export interface BootSequenceState {
   downloadProgress: number | null;
   modelCacheStatus: ModelCacheStatus;
   isBooting: boolean;
+  bootStatus: string;
 }
 
 interface UseBootSequenceProps {
@@ -24,6 +25,7 @@ export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps)
   const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('idle');
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const [isBooting, setIsBooting] = useState(false);
+  const [bootStatus, setBootStatus] = useState<string>('');
   
   // Use System Check Worker
   const { modelCacheStatus, checkCache } = useSystemCheck();
@@ -46,6 +48,7 @@ export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps)
   const startBootSequence = async () => {
       setIsBooting(true);
       setDownloadProgress(0);
+      setBootStatus('Initializing services...');
       logger.info('SESSION', 'Starting boot sequence');
 
       // 1. Request Permission Immediately (User Gesture)
@@ -55,6 +58,7 @@ export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps)
 
       // 2. Start initializing services
       if (voiceMode === 'neural') {
+          setBootStatus('Preparing AI Model...');
           kokoroService.initialize()
             .then(() => { isServicesReadyRef.current = true; })
             .catch(err => {
@@ -64,6 +68,7 @@ export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps)
       } else {
           // In native mode, we skip the heavy model load
           logger.info('SESSION', 'Skipping Kokoro init (Native Mode)');
+          setBootStatus('Preparing Voice Engine...');
           isServicesReadyRef.current = true;
           // Immediately jump progress
           setTimeout(() => {
@@ -100,14 +105,20 @@ export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps)
           // Wait for services at 99%
           if (virtualProgress > 99 && !isServicesReadyRef.current) {
               virtualProgress = 99;
+              setBootStatus('Finalizing model download...');
           }
 
           if (virtualProgress > 100) virtualProgress = 100;
           setDownloadProgress(virtualProgress);
+          
+          // Update status during download
+          if (virtualProgress < 99 && isServicesReadyRef.current === false) {
+              setBootStatus(`Downloading AI Model (${Math.round(virtualProgress)}%)...`);
+          }
 
           if (virtualProgress >= 100 && isServicesReadyRef.current) {
               clearInterval(interval);
-              // setIsBooting(false); // Removed: Keep booting state until onComplete finishes
+              setBootStatus('Checking permissions...');
               
               // Poll for cache status (SW might lag behind download)
               let attempts = 0;
@@ -137,17 +148,27 @@ export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps)
                       setTimeout(() => reject(new Error('Permission request timed out')), 10000);
                   });
 
+                  logger.info('SESSION', 'Waiting for permission promise...');
+
                   const granted = await Promise.race([permissionPromise, timeoutPromise]);
                   
+                  logger.info('SESSION', 'Permission resolved', { granted });
                   setPermissionStatus(granted ? 'granted' : 'denied');
+                  setBootStatus(granted ? 'Starting session...' : 'Permission denied');
+                  
+                  // Small delay to let the user see the status change
+                  await new Promise(r => setTimeout(r, 500));
+                  
                   await onComplete(granted);
               } catch (e) {
                   logger.error('SESSION', 'Auto-start failed', e);
                   // Even if failed, we call onComplete with false or handle error
                   setPermissionStatus('denied');
+                  setBootStatus('Boot failed. Please retry.');
               } finally {
                   // Only end booting state when session start is fully resolved
                   setIsBooting(false);
+                  setBootStatus('');
               }
           }
       }, UPDATE_INTERVAL);
@@ -167,7 +188,8 @@ export function useBootSequence({ voiceMode, onComplete }: UseBootSequenceProps)
           permissionStatus,
           downloadProgress,
           modelCacheStatus,
-          isBooting
+          isBooting,
+          bootStatus
       },
       actions: {
           startBootSequence,

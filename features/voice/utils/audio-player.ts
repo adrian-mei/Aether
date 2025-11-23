@@ -51,6 +51,18 @@ export class AudioPlayer {
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
+
+    // Unlock iOS Audio: Play a short silent buffer
+    try {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+    } catch (e) {
+        // Ignore errors during unlock
+        logger.debug('AUDIO', 'Silent unlock failed (non-fatal)', e);
+    }
   }
 
   /**

@@ -138,6 +138,7 @@ export function useVoiceInteraction(voiceMode: VoiceMode = 'neural') {
   }, [stopSR, stopTTS]);
 
   const speak = useCallback(async (text: string, options: { autoResume?: boolean; onStart?: (duration: number) => void } = { autoResume: true }) => {
+      logger.info('VOICE', 'Speak requested', { textLength: text.length });
       // Stop listening while speaking
       stopSR();
       // Show 'processing' (Reflecting) state while buffering audio, instead of 'speaking' immediately

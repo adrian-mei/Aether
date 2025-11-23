@@ -10,6 +10,7 @@ interface OrbContainerProps {
   permissionStatus: PermissionStatus;
   emotionalTone: string;
   downloadProgress: number | null;
+  bootStatus?: string;
   onInteraction: () => void;
 }
 
@@ -19,6 +20,7 @@ export const OrbContainer = ({
   permissionStatus,
   emotionalTone,
   downloadProgress,
+  bootStatus,
   onInteraction,
 }: OrbContainerProps) => {
   const orbRef = useRef<HTMLButtonElement>(null);
@@ -129,6 +131,15 @@ export const OrbContainer = ({
                       <Bubbles />
                 </div>
             </div>
+          )}
+
+          {/* Boot Status Text Overlay (When 100% or waiting) */}
+          {((downloadProgress === 100 && sessionStatus === 'booting') || (bootStatus && bootStatus.length > 0)) && (
+              <div className="absolute -bottom-16 w-64 text-center animate-fade-in">
+                  <p className="text-sm font-medium text-emerald-300/90 animate-pulse">
+                      {bootStatus || 'Finalizing...'}
+                  </p>
+              </div>
           )}
 
           {/* Error/Status Icons Overlay */}

@@ -157,6 +157,7 @@ export const AetherUI = () => {
                 permissionStatus={state.permissionStatus}
                 emotionalTone={emotionalTone}
                 downloadProgress={state.downloadProgress}
+                bootStatus={state.bootStatus}
                 onInteraction={handleInteraction}
             />
 
