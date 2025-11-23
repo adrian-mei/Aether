@@ -112,6 +112,11 @@ export function useTTS(voiceMode: VoiceMode = 'neural') {
     
     if (preferredVoice) utterance.voice = preferredVoice;
 
+    logger.info('VOICE', 'Using Web Speech', { 
+        voice: preferredVoice?.name || 'Default',
+        voicesAvailable: voices.length 
+    });
+
     // Tuning
     utterance.rate = 1.0; 
     utterance.pitch = 1.2; 
@@ -139,7 +144,7 @@ export function useTTS(voiceMode: VoiceMode = 'neural') {
     };
 
     synth.speak(utterance);
-  }, [synth]);
+  }, [synth, voiceMode]);
 
   const stop = useCallback(() => {
       if (synth?.speaking) synth.cancel();
