@@ -22,6 +22,7 @@ export function useSessionManager() {
   const [isDebugOpen, setIsDebugOpen] = useState(false);
   // Default to native on low-end devices to save bandwidth/startup time
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('neural'); 
+  const [isDownloadingNeural, setIsDownloadingNeural] = useState(false);
   
   // 1. Session Access & Limits
   const access = useSessionAccess();
@@ -172,9 +173,31 @@ export function useSessionManager() {
   }, []);
 
   const toggleVoiceMode = () => {
-      const newMode = voiceMode === 'neural' ? 'native' : 'neural';
-      setVoiceMode(newMode);
-      logger.info('APP', `User toggled Voice Mode: ${newMode}`);
+      if (voiceMode === 'native') {
+          // Switching TO Neural
+          if (kokoroService.isReady) {
+              setVoiceMode('neural');
+              logger.info('APP', 'Switched to Neural Voice (Ready)');
+          } else {
+              // Trigger download
+              logger.info('APP', 'Triggering Neural Voice Download');
+              setIsDownloadingNeural(true);
+              kokoroService.initialize()
+                  .then(() => {
+                      setIsDownloadingNeural(false);
+                      setVoiceMode('neural');
+                      logger.info('APP', 'Neural Voice Downloaded & Enabled');
+                  })
+                  .catch(err => {
+                      setIsDownloadingNeural(false);
+                      logger.error('APP', 'Neural Voice Download Failed', err);
+                  });
+          }
+      } else {
+          // Switching TO Native
+          setVoiceMode('native');
+          logger.info('APP', 'Switched to Native Voice');
+      }
   };
 
   return {
@@ -182,6 +205,7 @@ export function useSessionManager() {
       status: boot.state.isBooting ? 'booting' : (access.state.isLimitReached ? 'limit-reached' : status),
       isDebugOpen,
       voiceMode,
+      isDownloadingNeural,
       voiceState,
       permissionStatus: boot.state.permissionStatus,
       currentAssistantMessage: conversation.state.currentAssistantMessage,

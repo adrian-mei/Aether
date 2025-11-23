@@ -34,7 +34,7 @@ export class KokoroService implements ITextToSpeechService {
   private worker: Worker | null = null;
   private modelId = "onnx-community/Kokoro-82M-v1.0-ONNX";
   private isInitializing = false;
-  private isReady = false;
+  public isReady = false;
   private initializationPromise: Promise<void> | null = null;
 
   // Promise resolvers for active requests
