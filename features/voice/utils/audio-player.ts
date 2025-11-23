@@ -13,7 +13,30 @@ export class AudioPlayer {
   private isPlaying = false;
   private currentSource: AudioBufferSourceNode | null = null;
 
-  constructor() {}
+  constructor() {
+    this.setupMediaSession();
+  }
+
+  private setupMediaSession() {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', async () => {
+        logger.info('AUDIO', 'MediaSession: Play');
+        await this.resume();
+      });
+      
+      navigator.mediaSession.setActionHandler('pause', async () => {
+        logger.info('AUDIO', 'MediaSession: Pause');
+        if (this.audioContext) {
+          await this.audioContext.suspend();
+        }
+      });
+      
+      navigator.mediaSession.setActionHandler('stop', () => {
+         logger.info('AUDIO', 'MediaSession: Stop');
+         this.stop();
+      });
+    }
+  }
 
   private getAudioContext(): AudioContext {
     if (!this.audioContext) {
@@ -35,6 +58,18 @@ export class AudioPlayer {
    * Returns a promise that resolves when playback *finishes*.
    */
   public async play(audioData: Float32Array, sampleRate: number): Promise<void> {
+    // Update Media Session Metadata
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'Aether',
+            artist: 'Voice Companion',
+            artwork: [
+                { src: '/icons/globe.svg', sizes: '512x512', type: 'image/svg+xml' }
+            ]
+        });
+        navigator.mediaSession.playbackState = 'playing';
+    }
+
     return new Promise((resolve, reject) => {
       this.queue.push({ audioData, sampleRate, resolve, reject });
       this.processQueue();
@@ -66,6 +101,11 @@ export class AudioPlayer {
         // Remove from queue
         this.queue.shift();
         
+        // Update MediaSession if queue empty
+        if (this.queue.length === 0 && 'mediaSession' in navigator) {
+             navigator.mediaSession.playbackState = 'paused'; // or 'none'
+        }
+
         // Resolve promise
         item.resolve();
         

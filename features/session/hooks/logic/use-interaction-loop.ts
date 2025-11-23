@@ -58,7 +58,11 @@ export function useInteractionLoop({
     let intervalId: NodeJS.Timeout;
     if (voice.state === 'processing') {
       intervalId = setInterval(() => {
-        const elapsed = Date.now() - conversation.actions.getLastActivity();
+        const lastActivity = conversation.actions.getLastActivity();
+        // If lastActivity is 0 (never set), we assume it just started processing, so elapsed is 0.
+        // This prevents false timeouts on boot/intro.
+        const elapsed = lastActivity === 0 ? 0 : Date.now() - lastActivity;
+        
         // 30 seconds timeout
         if (elapsed > 30000) {
           logger.warn('SESSION', 'Request timed out (no activity)', { elapsedMs: elapsed });
