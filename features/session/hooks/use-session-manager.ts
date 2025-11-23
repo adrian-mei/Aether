@@ -5,7 +5,7 @@ import { audioPlayer } from '@/features/voice/utils/audio-player';
 import { logger } from '@/shared/lib/logger';
 import { kokoroService } from '@/features/voice/services/kokoro-service';
 import { memoryService } from '@/features/memory/services/memory-service';
-import { isLowEndDevice } from '@/features/system/utils/device-capabilities';
+import { isLowEndDevice, checkDeviceCapabilities } from '@/features/system/utils/device-capabilities';
 
 import { useSessionAccess } from './access/use-session-access';
 import { useBootSequence } from './lifecycle/use-boot-sequence';
@@ -23,6 +23,11 @@ export function useSessionManager() {
   // Default to native on low-end devices to save bandwidth/startup time
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('neural'); 
   const [isDownloadingNeural, setIsDownloadingNeural] = useState(false);
+  
+  // STRICT FLOW CONTROL
+  // Mobile Flow: Buffers responses to avoid autoplay blocks, defaults to Native Voice
+  // Desktop Flow: Streams responses for real-time feel, defaults to Neural Voice
+  const [isMobileFlow, setIsMobileFlow] = useState(false);
   
   // 1. Session Access & Limits
   const access = useSessionAccess();
@@ -61,6 +66,7 @@ export function useSessionManager() {
     interactionCount: access.state.interactionCount,
     onSpeak: speak,
     isSessionActive: status === 'running',
+    shouldBuffer: isMobileFlow, // Enable buffering for Mobile Flow
     onSessionEnd: () => {
         resetRef.current();
         setStatus('idle');
@@ -96,10 +102,24 @@ export function useSessionManager() {
   useEffect(() => {
     logger.info('APP', 'Session manager initializing...');
 
-    // Check device capabilities
+    // Check device capabilities & Set Flow Mode
+    const caps = checkDeviceCapabilities();
+    const isMobile = caps.isMobile;
+    
+    if (isMobile) {
+        setIsMobileFlow(true);
+        logger.info('APP', 'Mobile device detected, activating Mobile Flow (Buffered Response)');
+    } else {
+        logger.info('APP', 'Desktop device detected, activating Desktop Flow (Streaming Response)');
+    }
+
     if (isLowEndDevice()) {
         logger.info('APP', 'Low-end device detected, defaulting to Native Voice');
         setVoiceMode('native');
+    } else if (isMobile) {
+        // Even if high-end mobile, default to Native for stability unless user overrides
+        // (Optional: can be removed if we trust high-end mobile with Kokoro)
+        // But for now, let's keep Neural default for high-end mobile if they support it
     }
 
     async function initialize() {
@@ -141,8 +161,18 @@ export function useSessionManager() {
     await boot.actions.retryPermission().then(() => true).catch(() => false);
   };
 
+  const isTogglingRef = useRef(false);
   const toggleListening = () => {
     if (access.state.isLimitReached) return;
+    
+    // Debounce to prevent crash
+    if (isTogglingRef.current) {
+        logger.warn('APP', 'Toggle ignored (debounced)');
+        return;
+    }
+    isTogglingRef.current = true;
+    setTimeout(() => { isTogglingRef.current = false; }, 1000); // 1s cooldown
+
     logger.info('APP', 'User clicked Toggle Listening', { currentState: voiceState });
     if (voiceState === 'idle') {
       startListening();
