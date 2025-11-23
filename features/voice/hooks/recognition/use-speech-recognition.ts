@@ -38,7 +38,7 @@ declare global {
 }
 
 interface UseSpeechRecognitionProps {
-  // No props needed for callbacks anymore
+  silenceTimeout?: number;
 }
 
 export interface SpeechInput {
@@ -46,7 +46,7 @@ export interface SpeechInput {
     timestamp: number;
 }
 
-export function useSpeechRecognition(_props?: UseSpeechRecognitionProps) {
+export function useSpeechRecognition({ silenceTimeout = 1000 }: UseSpeechRecognitionProps = {}) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ export function useSpeechRecognition(_props?: UseSpeechRecognitionProps) {
   const shouldKeepListening = useRef(false);
   
   const MAX_RETRIES = 2;
-  const SILENCE_TIMEOUT_MS = 1000;
+  const SILENCE_TIMEOUT_MS = silenceTimeout;
   const WATCHDOG_TIMEOUT_MS = 8000;
 
   // Initialize

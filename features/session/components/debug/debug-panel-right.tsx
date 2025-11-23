@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { logger, LogEntry } from '@/shared/lib/logger';
-import { Search, Trash2, Copy, Check, ChevronRight, ChevronDown, Filter, Zap, Sparkles } from 'lucide-react';
+import { Search, Trash2, Copy, Check, ChevronRight, ChevronDown, Filter, Zap, Sparkles, Smartphone, Monitor } from 'lucide-react';
 import { useSession } from '@/features/session/context/session-context';
 
 import { Loader2 } from 'lucide-react';
 
 export function DebugPanelRight() {
-  const { state: { voiceMode, isDownloadingNeural }, actions: { toggleVoiceMode } } = useSession();
+  const { state: { voiceMode, isDownloadingNeural, isMobileFlow }, actions: { toggleVoiceMode } } = useSession();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   // Lazy init state from localStorage
   const [showVerbose, setShowVerbose] = useState(() => {
@@ -95,6 +95,20 @@ export function DebugPanelRight() {
         </div>
         
         <div className="flex items-center gap-1">
+            {/* Flow Mode Indicator */}
+            <div 
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[10px] font-bold tracking-wider border ${
+                    isMobileFlow 
+                        ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' 
+                        : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                }`}
+                title={isMobileFlow ? "Mobile Flow (Buffered Audio + Relaxed VAD)" : "Desktop Flow (Streaming Audio + Fast VAD)"}
+            >
+                {isMobileFlow ? <Smartphone size={12} /> : <Monitor size={12} />}
+            </div>
+
+            <div className="h-4 w-[1px] bg-white/10 mx-1" />
+
             <button
                 onClick={toggleVoiceMode}
                 disabled={isDownloadingNeural}

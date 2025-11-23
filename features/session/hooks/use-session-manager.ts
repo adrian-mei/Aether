@@ -47,7 +47,9 @@ export function useSessionManager() {
   });
 
   // 3. Voice Agent
-  const voice = useVoiceInteraction(voiceMode);
+  // Increase silence timeout in Mobile Flow to prevent accidental cut-offs
+  const silenceTimeout = isMobileFlow ? 2000 : 1000;
+  const voice = useVoiceInteraction(voiceMode, { silenceTimeout });
   const { 
     state: voiceState,
     transcript,
@@ -236,6 +238,7 @@ export function useSessionManager() {
       isDebugOpen,
       voiceMode,
       isDownloadingNeural,
+      isMobileFlow, // Export flow mode for UI
       voiceState,
       permissionStatus: boot.state.permissionStatus,
       currentAssistantMessage: conversation.state.currentAssistantMessage,

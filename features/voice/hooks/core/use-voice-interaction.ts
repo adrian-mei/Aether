@@ -12,7 +12,11 @@ export interface VoiceEvent {
     payload?: string | number;
 }
 
-export function useVoiceInteraction(voiceMode: VoiceMode = 'neural') {
+interface UseVoiceInteractionProps {
+    silenceTimeout?: number;
+}
+
+export function useVoiceInteraction(voiceMode: VoiceMode = 'neural', { silenceTimeout }: UseVoiceInteractionProps = {}) {
   // Explicit overrides for states that cannot be purely derived from sub-hooks
   const [manualState, setManualState] = useState<'processing' | 'muted' | null>(null);
   
@@ -26,7 +30,7 @@ export function useVoiceInteraction(voiceMode: VoiceMode = 'neural') {
     startListening: startSR, 
     stopListening: stopSR,
     resetTranscript
-  } = useSpeechRecognition();
+  } = useSpeechRecognition({ silenceTimeout });
 
   // Reactive State Logic
   useEffect(() => {
