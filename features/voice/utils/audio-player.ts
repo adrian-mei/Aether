@@ -1,4 +1,5 @@
 import { logger } from '@/shared/lib/logger';
+import { MediaSessionManager } from './media-session-manager';
 
 interface QueueItem {
   audioData: Float32Array;
@@ -12,30 +13,14 @@ export class AudioPlayer {
   private queue: QueueItem[] = [];
   private isPlaying = false;
   private currentSource: AudioBufferSourceNode | null = null;
+  private mediaSession: MediaSessionManager;
 
   constructor() {
-    this.setupMediaSession();
-  }
-
-  private setupMediaSession() {
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', async () => {
-        logger.info('AUDIO', 'MediaSession: Play');
-        await this.resume();
-      });
-      
-      navigator.mediaSession.setActionHandler('pause', async () => {
-        logger.info('AUDIO', 'MediaSession: Pause');
-        if (this.audioContext) {
-          await this.audioContext.suspend();
-        }
-      });
-      
-      navigator.mediaSession.setActionHandler('stop', () => {
-         logger.info('AUDIO', 'MediaSession: Stop');
-         this.stop();
-      });
-    }
+    this.mediaSession = new MediaSessionManager(
+      async () => this.resume(),
+      async () => { if (this.audioContext) await this.audioContext.suspend(); },
+      () => this.stop()
+    );
   }
 
   private getAudioContext(): AudioContext {
@@ -76,16 +61,7 @@ export class AudioPlayer {
    */
   public async play(audioData: Float32Array, sampleRate: number): Promise<void> {
     // Update Media Session Metadata
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: 'Aether',
-            artist: 'Voice Companion',
-            artwork: [
-                { src: '/icons/globe.svg', sizes: '512x512', type: 'image/svg+xml' }
-            ]
-        });
-        navigator.mediaSession.playbackState = 'playing';
-    }
+    this.mediaSession.updateMetadata(true);
 
     return new Promise((resolve, reject) => {
       this.queue.push({ audioData, sampleRate, resolve, reject });
@@ -133,8 +109,8 @@ export class AudioPlayer {
         }
         
         // Update MediaSession if queue empty
-        if (this.queue.length === 0 && 'mediaSession' in navigator) {
-             navigator.mediaSession.playbackState = 'paused'; // or 'none'
+        if (this.queue.length === 0) {
+             this.mediaSession.updateMetadata(false);
         }
 
         // Resolve promise

@@ -142,6 +142,9 @@ export const AetherUI = () => {
               sessionStatus={state.status}
               modelCacheStatus={state.modelCacheStatus}
               tokenUsage={state.tokenUsage}
+              voiceMode={state.voiceMode}
+              isDownloadingNeural={state.isDownloadingNeural}
+              onToggleVoiceMode={actions.toggleVoiceMode}
               onTestApi={() => chatService.testApiConnection()}
               onSimulateInput={actions.handleInputComplete}
             />

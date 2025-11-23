@@ -1,9 +1,10 @@
 import React, { useRef } from 'react';
-import { Lock, Compass, AlertCircle, Play } from 'lucide-react';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
-import { isLowEndDevice } from '@/features/system/utils/device-capabilities';
-import { Bubbles } from './bubbles';
+import { getOrbGradient, getOrbShadow } from './parts/orb-styles';
+import { OrbParticles } from './parts/orb-particles';
+import { OrbLiquidFill } from './parts/orb-liquid-fill';
+import { OrbStatusOverlay } from './parts/orb-status-overlay';
 
 interface OrbContainerProps {
   uiVoiceState: string;
@@ -25,30 +26,6 @@ export const OrbContainer = ({
   onInteraction,
 }: OrbContainerProps) => {
   const orbRef = useRef<HTMLButtonElement>(null);
-
-  // Color schemes based on emotional tone and state
-  const getOrbGradient = () => {
-    const combinations: Record<string, string> = {
-      'idle-calm': 'from-emerald-500/40 via-green-500/30 to-teal-500/40',
-      'listening-engaged': 'from-emerald-400/50 via-teal-400/40 to-green-400/50',
-      'speaking-warm': 'from-lime-400/50 via-emerald-400/40 to-green-400/50',
-      'processing-contemplative': 'from-teal-500/40 via-emerald-500/35 to-green-600/40',
-      'error-calm': 'from-red-500/40 via-orange-500/30 to-red-500/40',
-    };
-    const key = `${uiVoiceState}-${emotionalTone}`;
-    return combinations[key] || combinations['idle-calm'];
-  };
-
-  const getOrbShadow = () => {
-    const shadows: Record<string, string> = {
-      idle: 'shadow-[0_0_100px_rgba(52,211,153,0.3),0_0_200px_rgba(16,185,129,0.15)]',
-      listening: 'shadow-[0_0_120px_rgba(52,211,153,0.4),0_0_250px_rgba(20,184,166,0.25)]',
-      speaking: 'shadow-[0_0_150px_rgba(163,230,53,0.4),0_0_300px_rgba(132,204,22,0.2)]',
-      processing: 'shadow-[0_0_80px_rgba(20,184,166,0.3),0_0_160px_rgba(52,211,153,0.2)]',
-      error: 'shadow-[0_0_100px_rgba(239,68,68,0.3),0_0_200px_rgba(220,38,38,0.15)]',
-    };
-    return shadows[uiVoiceState] || shadows.idle;
-  };
 
   const handleInteraction = () => {
     // Haptic feedback
@@ -78,22 +55,7 @@ export const OrbContainer = ({
         )}
 
         {/* Processing particles */}
-        {uiVoiceState === 'processing' && (
-          <div className="absolute inset-0 pointer-events-none">
-            {[...Array(isLowEndDevice() ? 3 : 6)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-1 h-1 bg-teal-300/60 rounded-full animate-orbit"
-                style={{
-                  top: '50%',
-                  left: '50%',
-                  animationDelay: `${i * 0.2}s`,
-                  transformOrigin: '0 0',
-                }}
-              />
-            ))}
-          </div>
-        )}
+        {uiVoiceState === 'processing' && <OrbParticles />}
         
         {/* Main Interactive Orb */}
         <button
@@ -101,8 +63,8 @@ export const OrbContainer = ({
           onClick={handleInteraction}
           className={`
             relative w-[35vmin] h-[35vmin] max-w-[256px] max-h-[256px] min-w-[200px] min-h-[200px] rounded-full
-            bg-gradient-to-br ${getOrbGradient()}
-            ${getOrbShadow()}
+            bg-gradient-to-br ${getOrbGradient(uiVoiceState, emotionalTone)}
+            ${getOrbShadow(uiVoiceState)}
             backdrop-blur-2xl
             border border-emerald-400/20
             transition-all duration-1000 ease-out
@@ -120,52 +82,16 @@ export const OrbContainer = ({
           <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-emerald-300/10 to-transparent opacity-50" />
           <div className="absolute inset-0 bg-gradient-radial from-center from-white/5 to-transparent" />
           
-          {/* Liquid Fill Animation (Gamified Download) */}
-          {downloadProgress !== null && downloadProgress < 100 && (
-            <div 
-                className="absolute bottom-0 left-0 right-0 bg-teal-400/40 backdrop-blur-sm transition-all duration-300 ease-out flex items-center justify-center overflow-hidden z-10"
-                style={{ height: `${downloadProgress}%` }}
-            >
-                <div className="w-full h-[2px] bg-teal-300/70 absolute top-0 animate-pulse" />
-                {/* Bubbles effect */}
-                <div className="absolute inset-0">
-                      <Bubbles />
-                </div>
-            </div>
-          )}
+          {/* Liquid Fill Animation */}
+          <OrbLiquidFill progress={downloadProgress} />
 
-          {/* Boot Status Text Overlay (When 100% or waiting) */}
-          {((downloadProgress === 100 && sessionStatus === 'booting') || (bootStatus && bootStatus.length > 0)) && (
-              <div className="absolute -bottom-16 w-64 text-center animate-fade-in">
-                  <p className="text-sm font-medium text-emerald-300/90 animate-pulse">
-                      {bootStatus || 'Finalizing...'}
-                  </p>
-              </div>
-          )}
-
-          {/* Error/Status Icons Overlay */}
-          {sessionStatus === 'insecure-context' && (
-            <div className="absolute inset-0 flex items-center justify-center z-20">
-                <Lock className="w-16 h-16 text-red-300/80" />
-            </div>
-          )}
-            {sessionStatus === 'unsupported' && (
-            <div className="absolute inset-0 flex items-center justify-center z-20">
-                <Compass className="w-16 h-16 text-yellow-300/80" />
-            </div>
-          )}
-            {permissionStatus === 'denied' && (
-            <div className="absolute inset-0 flex items-center justify-center z-20">
-                <AlertCircle className="w-16 h-16 text-red-300/80" />
-            </div>
-          )}
-
-          {/* Start Prompt Overlay */}
-          {sessionStatus === 'awaiting-boot' && (
-              <div className="absolute inset-0 flex items-center justify-center z-20 animate-pulse">
-                  <Play className="w-16 h-16 text-emerald-200/80 fill-emerald-200/50 ml-2" />
-              </div>
-          )}
+          {/* Status Overlay */}
+          <OrbStatusOverlay 
+              sessionStatus={sessionStatus}
+              permissionStatus={permissionStatus}
+              downloadProgress={downloadProgress}
+              bootStatus={bootStatus}
+          />
 
           {/* Animated inner core */}
           <div className="absolute inset-0 flex items-center justify-center">

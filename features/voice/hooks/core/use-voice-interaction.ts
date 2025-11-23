@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/shared/lib/logger';
 import { useSpeechRecognition } from '../recognition/use-speech-recognition';
 import { useTTS } from '../synthesis/use-tts';
-import { audioPlayer } from '@/features/voice/utils/audio-player';
+import { useAppLifecycle } from './use-app-lifecycle';
 import type { VoiceMode } from '@/features/session/hooks/use-session-manager';
 
 export type VoiceInteractionState = 'idle' | 'listening' | 'processing' | 'speaking' | 'permission-denied' | 'muted';
@@ -63,10 +63,7 @@ export function useVoiceInteraction(voiceMode: VoiceMode = 'neural') {
   }
 
   const stateRef = useRef(state);
-  // Keep ref in sync
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   // Actions
   const startListening = useCallback(() => {
@@ -81,41 +78,17 @@ export function useVoiceInteraction(voiceMode: VoiceMode = 'neural') {
     setManualState(null);
   }, [stopSR, stopTTS]);
 
-  // Handle visibility changes (Mobile lifecycle)
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.hidden) {
-        if (stateRef.current === 'listening') {
-            logger.info('VOICE', 'App backgrounded, pausing listening');
-            wasListeningRef.current = true;
-            stopSR();
-        } else {
-            wasListeningRef.current = false;
-        }
-        
-        // Allow TTS to continue in background (Podcast/Phone call style)
-        // if (isSpeaking) { stopTTS(); } 
-      } else {
-        // App foregrounded
-        logger.info('VOICE', 'App foregrounded');
-        
-        // Resume Audio Context (Vital for iOS)
-        try {
-            await audioPlayer.resume();
-        } catch (e) {
-            logger.warn('VOICE', 'Failed to resume audio context on foreground', e);
-        }
-
-        if (wasListeningRef.current && stateRef.current !== 'muted') {
-            logger.info('VOICE', 'Resuming listening from background state');
-            startListening();
-        }
+  // Handle lifecycle (Background/Foreground)
+  useAppLifecycle({
+      isListening: state === 'listening',
+      isSpeaking,
+      onPauseListening: stopSR,
+      onResumeListening: () => {
+          if (stateRef.current !== 'muted') {
+              startListening();
+          }
       }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isSpeaking, stopSR, startListening, stopTTS]);
+  });
 
   const toggleMute = useCallback(() => {
     if (stateRef.current === 'muted') {
