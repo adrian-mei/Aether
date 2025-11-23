@@ -3,16 +3,22 @@ import { logger } from '@/shared/lib/logger';
 
 interface UseMessageQueueProps {
   onSpeak: (text: string, options: { autoResume?: boolean; waitForPlayback?: boolean }) => Promise<void>;
+  shouldBuffer?: boolean;
 }
 
-export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
+export function useMessageQueue({ onSpeak, shouldBuffer = false }: UseMessageQueueProps) {
   const bufferRef = useRef<string>('');
   const queueRef = useRef<string[]>([]);
+  const fullResponseBufferRef = useRef<string>(''); // For buffered mode
   const isSpeakingRef = useRef<boolean>(false);
   const isStreamActiveRef = useRef<boolean>(false);
   const processQueueRef = useRef<() => Promise<void>>(async () => {});
 
   const processQueue = useCallback(async () => {
+    // If we are in "Buffer Mode" (Mobile), we do NOT process the queue incrementally.
+    // We wait until the stream ends to flush the whole thing.
+    if (shouldBuffer) return;
+
     if (isSpeakingRef.current) return;
 
     if (queueRef.current.length === 0) {
@@ -44,13 +50,20 @@ export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
     
     isSpeakingRef.current = false;
     processQueueRef.current();
-  }, [onSpeak]);
+  }, [onSpeak, shouldBuffer]);
 
   useEffect(() => {
     processQueueRef.current = processQueue;
   }, [processQueue]);
 
   const handleChunk = useCallback((chunk: string) => {
+    if (shouldBuffer) {
+        // Mobile Flow: Just accumulate everything
+        fullResponseBufferRef.current += chunk;
+        return; // Don't process queue yet
+    }
+
+    // Desktop Flow: Stream incrementally
     bufferRef.current += chunk;
     
     // Split into sentences using a simple heuristic
@@ -71,19 +84,33 @@ export function useMessageQueue({ onSpeak }: UseMessageQueueProps) {
     newBuffer = parts[parts.length - 1];
     bufferRef.current = newBuffer;
     processQueue();
-  }, [processQueue]);
+  }, [processQueue, shouldBuffer]);
 
   const startStream = useCallback(() => {
     bufferRef.current = '';
+    fullResponseBufferRef.current = '';
     queueRef.current = [];
     isSpeakingRef.current = false;
     isStreamActiveRef.current = true;
-  }, []);
+    logger.info('QUEUE', 'Stream started', { mode: shouldBuffer ? 'BUFFERED (Mobile)' : 'STREAMING (Desktop)' });
+  }, [shouldBuffer]);
 
-  const endStream = useCallback(() => {
+  const endStream = useCallback(async () => {
     isStreamActiveRef.current = false;
-    processQueue(); // Flush any remainders
-  }, [processQueue]);
+    
+    if (shouldBuffer) {
+        // Flush the entire response as one utterance
+        const text = fullResponseBufferRef.current.trim();
+        if (text) {
+            logger.info('QUEUE', 'Flushing full buffered response', { length: text.length });
+            // Buffered responses always wait for playback to ensure stability
+            await onSpeak(text, { autoResume: true, waitForPlayback: true });
+        }
+        fullResponseBufferRef.current = '';
+    } else {
+        processQueue(); // Flush any remainders
+    }
+  }, [processQueue, shouldBuffer, onSpeak]);
 
   return {
     handleChunk,

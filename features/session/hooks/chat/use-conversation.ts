@@ -10,6 +10,7 @@ interface UseConversationProps {
   onSpeak: (text: string, options?: { autoResume?: boolean; onStart?: (duration: number) => void }) => Promise<void>;
   onSessionEnd: () => void;
   isSessionActive: boolean;
+  shouldBuffer?: boolean;
 }
 
 export function useConversation({
@@ -17,7 +18,8 @@ export function useConversation({
   interactionCount,
   onSpeak,
   onSessionEnd,
-  isSessionActive
+  isSessionActive,
+  shouldBuffer = false
 }: UseConversationProps) {
   const [currentAssistantMessage, setCurrentAssistantMessage] = useState<string>('');
   const [currentMessageDuration, setCurrentMessageDuration] = useState<number>(0);
@@ -31,6 +33,7 @@ export function useConversation({
 
   // 3. Output/Streaming (Voice)
   const { handleChunk, startStream, endStream } = useMessageQueue({
+    shouldBuffer,
     onSpeak: async (text, options) => {
       await onSpeak(text, {
         ...options,

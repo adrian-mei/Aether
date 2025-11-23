@@ -4,12 +4,15 @@ Aether follows a "Feature-First" (Screaming Architecture) pattern, organizing co
 
 ## High-Level Overview
 
-The application is a Single Page Application (SPA) built with Next.js (App Router), running primarily on the client-side to leverage Web APIs (Web Speech, Web Audio, WebGPU).
+The application is a Hybrid Web App built with Next.js (App Router). It supports two operational modes:
+1.  **Client-Only Mode (Default)**: Runs entirely in the browser (PWA style) using WebGPU for AI. Best for powerful desktops.
+2.  **Server-Augmented Mode (Self-Hosted)**: Offloads heavy AI tasks (TTS) to the hosting server (e.g., Oracle Cloud VPS). Best for mobile devices and low-power hardware.
 
 ```mermaid
 graph TD
     Client[Client Browser] -->|HTTPS| Next[Next.js Server]
     Next -->|API Route| Gemini[Google Gemini API]
+    Next -->|API Route /api/tts| ServerTTS[Server-Side Kokoro Node.js]
     
     subgraph "Client-Side (Browser)"
         UI[React UI]
@@ -17,8 +20,9 @@ graph TD
         Memory[Local Vector DB]
         
         UI --> Voice
-        Voice -->|Kokoro TTS| Audio[Web Audio API]
-        Voice -->|Web Speech| STT[Speech-to-Text]
+        Voice -.->|WebGPU (Desktop)| ClientTTS[Client Kokoro WASM]
+        Voice -.->|Web Speech (Mobile Fallback)| SysTTS[System TTS]
+        Voice -->|Fetch (Mobile High Quality)| Next
         
         UI -->|Chat History| Memory
     end
