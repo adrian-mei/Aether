@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Lock, Compass, AlertCircle, Play } from 'lucide-react';
 import { SessionStatus } from '@/features/session/hooks/use-session-manager';
 import { PermissionStatus } from '@/features/voice/utils/permissions';
+import { isLowEndDevice } from '@/features/system/utils/device-capabilities';
 import { Bubbles } from './bubbles';
 
 interface OrbContainerProps {
@@ -79,7 +80,7 @@ export const OrbContainer = ({
         {/* Processing particles */}
         {uiVoiceState === 'processing' && (
           <div className="absolute inset-0 pointer-events-none">
-            {[...Array(6)].map((_, i) => (
+            {[...Array(isLowEndDevice() ? 3 : 6)].map((_, i) => (
               <div
                 key={i}
                 className="absolute w-1 h-1 bg-teal-300/60 rounded-full animate-orbit"

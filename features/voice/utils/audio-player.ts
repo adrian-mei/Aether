@@ -112,11 +112,25 @@ export class AudioPlayer {
       this.currentSource = source;
 
       source.onended = () => {
+        // Cleanup: Disconnect source to allow GC
+        try {
+            if (this.currentSource) {
+                this.currentSource.disconnect();
+                this.currentSource.buffer = null; // Explicitly release buffer reference
+            }
+        } catch (e) {
+             logger.warn('AUDIO', 'Error disconnecting source', e);
+        }
+
         this.currentSource = null;
         this.isPlaying = false;
         
         // Remove from queue
-        this.queue.shift();
+        const finishedItem = this.queue.shift();
+        // Explicitly clear the Float32Array in the finished item if possible
+        if (finishedItem) {
+             finishedItem.audioData = new Float32Array(0); // Release memory
+        }
         
         // Update MediaSession if queue empty
         if (this.queue.length === 0 && 'mediaSession' in navigator) {
