@@ -122,7 +122,10 @@ export function useTTS(voiceMode: VoiceMode = 'neural') {
     utterance.pitch = 1.2; 
     utterance.volume = 1.0;
 
+    let hasStarted = false;
+
     utterance.onstart = () => {
+        hasStarted = true;
         setIsSpeaking(true);
         // Web Speech doesn't give duration upfront easily, fallback to 0 or estimate?
         // Estimated duration: 15 chars per second?
@@ -141,9 +144,29 @@ export function useTTS(voiceMode: VoiceMode = 'neural') {
             logger.error('VOICE', 'Speech synthesis error', { error: e.error });
         }
         setIsSpeaking(false);
+        // Ensure we clean up if error occurs before start
+        if (!hasStarted && onComplete) onComplete();
     };
 
-    synth.speak(utterance);
+    try {
+        synth.speak(utterance);
+        
+        // Safety timeout for mobile browsers that might block autoplay
+        setTimeout(() => {
+            if (!hasStarted) {
+                logger.warn('VOICE', 'Web Speech failed to start (autoplay blocked?)');
+                // Force cleanup/continuation
+                setIsSpeaking(false);
+                if (options.onStart) options.onStart(0);
+                if (onComplete) onComplete();
+                // Cancel pending utterance
+                synth.cancel();
+            }
+        }, 1000); // 1s timeout
+    } catch (e) {
+        logger.error('VOICE', 'Failed to call synth.speak', e);
+        if (onComplete) onComplete();
+    }
   }, [synth, voiceMode]);
 
   const stop = useCallback(() => {
