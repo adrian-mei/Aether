@@ -20,6 +20,7 @@ import { DebugPanelLeft } from './debug/debug-panel-left';
 import { DebugPanelRight } from './debug/debug-panel-right';
 import { LandscapeWarning } from './layouts/landscape-warning';
 import { IOSInstallPrompt } from './modals/ios-install-prompt';
+import { MobileSupportNotice } from './modals/mobile-support-notice';
 
 export const AetherUI = () => {
   const { state, actions } = useSession();
@@ -101,6 +102,7 @@ export const AetherUI = () => {
     <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none pt-safe">
       <LandscapeWarning />
       <IOSInstallPrompt />
+      <MobileSupportNotice />
       
       <WaitlistModal 
         isOpen={state.status === 'limit-reached' && !isModalDismissed} 

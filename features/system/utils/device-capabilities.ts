@@ -24,8 +24,10 @@ export const checkDeviceCapabilities = () => {
 };
 
 export const isLowEndDevice = () => {
-    const { hardwareConcurrency } = checkDeviceCapabilities();
-    // Relaxed check: We assume modern mobiles (iPhone 11+) can handle Neural Voice (via WASM if needed).
-    // We only fallback to native if the CPU is very limited (< 4 cores).
+    const { isMobile, hasWebGPU, hardwareConcurrency } = checkDeviceCapabilities();
+    // Strict check for stability:
+    // 1. Mobile devices without WebGPU should default to Native to avoid slow WASM inference
+    // 2. Low core count devices (< 4) should default to Native
+    if (isMobile && !hasWebGPU) return true;
     return hardwareConcurrency < 4;
 };
