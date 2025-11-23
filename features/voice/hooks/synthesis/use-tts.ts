@@ -106,8 +106,12 @@ export function useTTS(voiceMode: VoiceMode = 'neural') {
     // Priority Voice Selection
     const voices = synth.getVoices();
     const preferredVoice = 
-        voices.find(v => v.name.includes('Catherine')) || 
+        voices.find(v => v.name === 'Samantha') || 
+        voices.find(v => v.name.includes('Samantha')) ||
+        voices.find(v => v.name === 'Karen') ||
+        voices.find(v => v.name === 'Tessa') ||
         voices.find(v => v.name.includes('Google') && v.name.includes('US') && v.name.includes('Female')) ||
+        voices.find(v => v.name.includes('Catherine')) || 
         voices.find(v => v.name.includes('Zira')) || 
         voices.find(v => v.name.includes('Female'));
     
