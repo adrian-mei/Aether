@@ -6,6 +6,22 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      padding: {
+        'safe': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'safe-left': 'env(safe-area-inset-left)',
+        'safe-right': 'env(safe-area-inset-right)',
+      },
+      margin: {
+        'safe': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'safe-left': 'env(safe-area-inset-left)',
+        'safe-right': 'env(safe-area-inset-right)',
+      },
+      height: {
+        'safe': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+      },
       animation: {
         'breathe': 'breathe 4s ease-in-out infinite',
         'ripple': 'ripple 2s linear infinite',
