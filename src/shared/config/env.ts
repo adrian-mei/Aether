@@ -3,9 +3,19 @@
  * Centralizes all environment variable access and validation.
  */
 
+// Function to determine API URL based on environment
+const getApiUrl = () => {
+  // Always use the proxy in production (Netlify)
+  if (process.env.NODE_ENV === 'production') {
+    return '/api/backend';
+  }
+  // For local development, use the direct backend URL
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
+};
+
 export const Env = {
   // Public (Client-side)
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '/api/backend',
+  NEXT_PUBLIC_API_URL: getApiUrl(),
   NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3002',
   NEXT_PUBLIC_ENABLE_LOGGING: process.env.NEXT_PUBLIC_ENABLE_LOGGING !== 'false', // Default true
   NEXT_PUBLIC_LOG_LEVEL: process.env.NEXT_PUBLIC_LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info'),
