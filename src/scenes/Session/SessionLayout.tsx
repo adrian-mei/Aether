@@ -15,7 +15,7 @@ export function SessionLayout() {
       <DebugControls 
         isOpen={state.isDebugOpen}
         onToggle={actions.toggleDebug}
-        onSimulateInput={actions.handleInputComplete}
+        onSimulateInput={actions.toggleListening}
       />
     </main>
   );
