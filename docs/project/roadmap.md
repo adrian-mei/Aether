@@ -22,9 +22,11 @@ Refine Aether into a sustainable, revenue-generating voice AI platform.
 *   [x] Split Hosting Architecture (Netlify Frontend + Oracle Backend).
 *   [x] CORS Configuration for Cross-Origin API access.
 *   [x] **Frontend Refactor**: Migrate to "Strict UI" architecture (No client-side AI).
-*   [ ] WebSocket Integration for low-latency voice streaming.
-*   [ ] Server-side TTS offloading.
+*   [x] **Backend Migration**: Switch to Fastify for high-performance API handling.
+*   [x] **WebSocket Integration**: Real-time bidirectional audio streaming.
+*   [x] **Local AI**: Server-side Whisper (STT) and Kokoro (TTS) integration.
 
 ## Future Architecture (Planned)
-*   **Server-Side Memory Migration**: Move from client-side IndexedDB to server-side vector database (e.g., SQLite + Vector Extension or Qdrant) to support cross-device memory.
+*   **Server-Side Memory Migration**: Move from in-memory session storage to a persistent database (Redis or SQLite) to support longer history and analytics.
 *   **Authentication System**: Implement user authentication (e.g., NextAuth.js) to securely segregate user data and memories on the server.
+*   **Analytics Dashboard**: Track "Care Minutes", active users, and financial metrics.

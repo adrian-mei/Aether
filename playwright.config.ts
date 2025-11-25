@@ -34,7 +34,10 @@ export default defineConfig({
     },
     {
       name: 'Desktop Chrome',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        permissions: ['microphone'],
+      },
     },
   ],
 });

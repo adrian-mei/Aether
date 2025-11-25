@@ -9,23 +9,23 @@ The Backend is an external service hosted on **Oracle Cloud Infrastructure (OCI)
 The backend runs as a **Docker container** to ensure consistency across environments.
 
 ### Core Services
-*   **API Server**: Node.js (Next.js API Routes) handles the WebSocket connection and orchestration.
-*   **STT Engine**: Server-side Whisper (or equivalent) processes incoming audio streams.
-*   **LLM Integration**: Connects to Google Gemini 2.0 Flash for intelligence.
-*   **TTS Engine**: Runs Kokoro 82M (via ONNX/Python bridge) to generate high-quality speech.
+*   **Server Framework**: **Fastify** (Node.js v20+) for high-performance API handling.
+*   **STT Engine**: **Whisper-tiny.en** (Local ONNX) for fast speech-to-text transcription.
+*   **LLM Integration**: Connects to **Google Gemini 2.0 Flash** via Vercel AI SDK for intelligence.
+*   **TTS Engine**: **Kokoro 82M** (Local ONNX) for high-quality, low-latency speech synthesis.
 
 ### Hardware
 *   **Provider**: Oracle Cloud Always Free Tier.
 *   **Instance**: VM.Standard.A1.Flex (ARM Ampere A1).
-*   **Specs**: 4 OCPUs, 24 GB RAM (Scalable).
-*   **OS**: Ubuntu 22.04 (ARM64).
+*   **Specs**: 4 OCPUs, 24 GB RAM.
+*   **OS**: Ubuntu 22.04 / Oracle Linux 8 (ARM64).
 
 ## 3. Deployment Guide
 
 ### Provisioning (Oracle Cloud)
 1.  Create an account on Oracle Cloud.
 2.  Provision a **VM.Standard.A1.Flex** instance.
-3.  Open Port **3000** in the VCN Security List (Ingress Rule).
+3.  Open Port **3002** (or 80/443 with reverse proxy) in the VCN Security List.
 
 ### Server Setup
 Access the server via SSH:
@@ -41,7 +41,7 @@ sudo usermod -aG docker ubuntu
 ```
 
 ### Deployment Workflow
-The backend code (kept in a separate repository) is deployed via Docker.
+The backend code is deployed via Docker.
 
 1.  **Sync Code**:
     ```bash
@@ -52,10 +52,10 @@ The backend code (kept in a separate repository) is deployed via Docker.
     ```bash
     cd ~/aether-backend
     docker build -t aether-backend .
-    docker run -d -p 3000:3000 --env-file .env --name aether-backend --restart always aether-backend
+    docker run -d -p 3002:3002 --env-file .env --name aether-backend --restart always aether-backend
     ```
 
 ### Environment Variables (`.env`)
 *   `GOOGLE_GENERATIVE_AI_API_KEY`: Gemini API Key.
-*   `ACCESS_CODE`: Secret code for bypassing rate limits.
-*   `CORS_ORIGIN`: The URL of the Netlify Frontend.
+*   `PORT`: Defaults to 3002.
+*   `ADMIN_PASSWORD`: Password for the /admin dashboard.

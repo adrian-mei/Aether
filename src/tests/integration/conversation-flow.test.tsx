@@ -1,11 +1,11 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { SessionContainer } from '@/features/session/components/session-container';
-import { useSessionManager } from '@/features/session/hooks/use-session-manager';
+import { SessionContainer } from '@/scenes/Session';
+import { useSessionManager } from '@/scenes/Session/Session.logic';
 
 // Mock dependencies
-jest.mock('@/features/session/hooks/use-session-manager');
-jest.mock('@/features/visuals/hooks/use-aether-visuals', () => ({
+jest.mock('@/scenes/Session/Session.logic');
+jest.mock('@/scenes/Session/Orb/Orb.logic', () => ({
   useAetherVisuals: () => ({
     uiVoiceState: 'idle',
     emotionalTone: 'calm',
@@ -13,17 +13,17 @@ jest.mock('@/features/visuals/hooks/use-aether-visuals', () => ({
     visualStatus: { text: 'Ready', subtext: 'Mocked' }
   })
 }));
-jest.mock('@/features/session/hooks/audio/use-session-audio', () => ({
+jest.mock('@/scenes/Session/hooks/use-session-audio', () => ({
   useSessionAudio: () => ({
     playOcean: jest.fn()
   })
 }));
-jest.mock('@/features/visuals/components/background-orbs', () => ({ BackgroundOrbs: () => <div data-testid="background-orbs" /> }));
-jest.mock('@/features/visuals/components/orb-container', () => ({ OrbContainer: ({ onInteraction }: { onInteraction: () => void }) => <button data-testid="orb" onClick={onInteraction}>Orb</button> }));
-jest.mock('@/features/session/components/header', () => ({ Header: () => <div data-testid="header" /> }));
-jest.mock('@/features/session/components/footer', () => ({ Footer: () => <div data-testid="footer" /> }));
-jest.mock('@/features/session/components/status-display', () => ({ StatusDisplay: () => <div data-testid="status-display" /> }));
-jest.mock('@/components/modals/waitlist-modal', () => ({ WaitlistModal: () => <div data-testid="waitlist-modal" /> }));
+jest.mock('@/scenes/Session/Orb/BackgroundOrbs', () => ({ BackgroundOrbs: () => <div data-testid="background-orbs" /> }));
+jest.mock('@/scenes/Session/Orb/Orb', () => ({ OrbContainer: ({ onInteraction }: { onInteraction: () => void }) => <button data-testid="orb" onClick={onInteraction}>Orb</button> }));
+jest.mock('@/scenes/Session/components/Header', () => ({ Header: () => <div data-testid="header" /> }));
+jest.mock('@/scenes/Session/components/Footer', () => ({ Footer: () => <div data-testid="footer" /> }));
+jest.mock('@/scenes/Session/components/StatusDisplay', () => ({ StatusDisplay: () => <div data-testid="status-display" /> }));
+jest.mock('@/scenes/Onboarding/WaitlistModal', () => ({ WaitlistModal: () => <div data-testid="waitlist-modal" /> }));
 
 describe('Conversation Flow Integration', () => {
   const mockActions = {

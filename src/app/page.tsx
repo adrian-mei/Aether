@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 
 const SessionContainer = dynamic(
-  () => import('@/features/session/components/session-container').then(mod => mod.SessionContainer),
+  () => import('@/scenes/Session').then(mod => mod.SessionContainer),
   { ssr: false }
 );
 

@@ -1,4 +1,4 @@
-import { AppConfig } from '@/config/app-config';
+import { AppConfig } from '@/shared/config/app-config';
 import { openDB, IDBPDatabase } from 'idb';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
@@ -17,9 +17,43 @@ export interface LogEntry {
   message: string;
   data?: unknown;
   stack?: string;
+  sessionId?: string;
+  turnId?: number;
+  duration?: number;
 }
 
 type LogListener = (entry: LogEntry) => void;
+
+/**
+ * Conversation Flow Event Types
+ */
+export const ConversationEvents = {
+  // Session lifecycle
+  SESSION_STARTED: 'session.started',
+  SESSION_CONNECTED: 'session.connected',
+  SESSION_ENDED: 'session.ended',
+  // Orb interaction
+  ORB_CLICKED: 'orb.clicked',
+  // Voice activity
+  VAD_SPEECH_DETECTED: 'vad.speech_detected',
+  VAD_SILENCE_DETECTED: 'vad.silence_detected',
+  // Audio streaming
+  AUDIO_STREAM_STARTED: 'audio.stream_started',
+  AUDIO_CHUNK_SENT: 'audio.chunk_sent',
+  // Transcription
+  TRANSCRIPT_RECEIVED: 'transcript.received',
+  // Playback
+  AUDIO_PLAYBACK_STARTED: 'audio.playback_started',
+  AUDIO_PLAYBACK_STOPPED: 'audio.playback_stopped',
+  // Interruption
+  INTERRUPT_TRIGGERED: 'interrupt.triggered',
+  // WebSocket
+  WS_MESSAGE_RECEIVED: 'ws.message_received',
+  WS_ERROR: 'ws.error',
+  // Waitlist
+  WAITLIST_SHOWN: 'waitlist.shown',
+  WAITLIST_SUBMITTED: 'waitlist.submitted',
+} as const;
 
 const MAX_LOGS = 500;
 const STORAGE_KEY = 'aether_logs';
@@ -250,6 +284,83 @@ class AetherLogger {
     if (typeof window !== 'undefined') {
       localStorage.setItem('aether_debug', String(enable));
     }
+  }
+
+  /**
+   * Log a conversation flow event with structured data
+   */
+  public logConversation(
+    event: string,
+    sessionId?: string,
+    turnId?: number,
+    duration?: number,
+    data?: unknown
+  ) {
+    const safeData = this.sanitize(data);
+    const timestamp = new Date().toISOString();
+
+    const entry: LogEntry = {
+      timestamp,
+      level: 'info',
+      category: 'ConversationFlow',
+      message: event,
+      sessionId,
+      turnId,
+      duration,
+      data: safeData,
+    };
+
+    if (!this.shouldLog('info')) return;
+
+    // Console Output with conversation context
+    if (typeof window !== 'undefined') {
+      const timeStr = this.formatTime(timestamp);
+      const style = this.getBrowserStyles('info');
+      const contextStr = [
+        sessionId ? `Session: ${sessionId.substring(0, 8)}` : null,
+        turnId ? `Turn: ${turnId}` : null,
+        duration ? `${duration}ms` : null
+      ].filter(Boolean).join(' | ');
+
+      const consoleArgs: unknown[] = [
+        `%c INFO%c ${timeStr} %c[ConversationFlow]%c ${event} ${contextStr ? `(${contextStr})` : ''}`,
+        style,
+        'color: #6b7280',
+        'color: #9ca3af; font-weight: bold;',
+        'color: inherit'
+      ];
+
+      if (data) consoleArgs.push(data);
+      console.info(...consoleArgs);
+    }
+
+    // In-memory storage
+    this.addLog(entry);
+  }
+}
+
+/**
+ * Performance Timer Utility for Frontend
+ */
+export class PerformanceTimer {
+  private startTime: number;
+
+  constructor() {
+    this.startTime = performance.now();
+  }
+
+  /**
+   * Get elapsed time in milliseconds
+   */
+  elapsed(): number {
+    return Math.round(performance.now() - this.startTime);
+  }
+
+  /**
+   * Reset the timer
+   */
+  reset(): void {
+    this.startTime = performance.now();
   }
 }
 

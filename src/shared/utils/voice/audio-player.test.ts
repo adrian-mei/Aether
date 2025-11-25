@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { AudioPlayer } from '@/features/voice/utils/audio-player';
+import { AudioPlayer } from './audio-player';
 import { waitFor } from '@testing-library/react';
 
 // Mock logger
 jest.mock('@/shared/lib/logger', () => ({
   logger: {
     error: jest.fn(),
+    warn: jest.fn(),
   },
 }));
 

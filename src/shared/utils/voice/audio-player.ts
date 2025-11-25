@@ -6,6 +6,8 @@ interface QueueItem {
   sampleRate: number;
   resolve: () => void;
   reject: (err: unknown) => void;
+  onStart?: (duration: number) => void;
+  duration: number;
 }
 
 export class AudioPlayer {
@@ -36,6 +38,12 @@ export class AudioPlayer {
     return this.audioContext;
   }
 
+  public async decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
+    const ctx = this.getAudioContext();
+    // decodeAudioData can be called on a suspended context
+    return ctx.decodeAudioData(arrayBuffer);
+  }
+
   public async resume(): Promise<void> {
     const ctx = this.getAudioContext();
     if (ctx.state === 'suspended') {
@@ -56,17 +64,55 @@ export class AudioPlayer {
   }
 
   /**
-   * Queues audio for playback. 
+   * Queues audio for playback.
    * Returns a promise that resolves when playback *finishes*.
    */
-  public async play(audioData: Float32Array, sampleRate: number): Promise<void> {
+  public async play(audioData: Float32Array, sampleRate: number, options?: { onStart?: (duration: number) => void }): Promise<void> {
+    const duration = audioData.length / sampleRate;
+    logger.debug('AUDIO_PLAYER', `Queuing audio. Queue length: ${this.queue.length + 1}, duration: ${duration.toFixed(2)}s`);
     // Update Media Session Metadata
     this.mediaSession.updateMetadata(true);
 
     return new Promise((resolve, reject) => {
-      this.queue.push({ audioData, sampleRate, resolve, reject });
+      this.queue.push({
+        audioData,
+        sampleRate,
+        resolve,
+        reject,
+        onStart: options?.onStart,
+        duration
+      });
       this.processQueue();
     });
+  }
+
+  public async playFromUrl(url: string, options?: { onStart?: (text?: string, duration?: number) => void }): Promise<void> {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const transcriptHeader = response.headers.get('X-Aether-Transcript');
+      const transcript = transcriptHeader ? decodeURIComponent(transcriptHeader) : undefined;
+
+      const audioData = await response.arrayBuffer();
+      const ctx = this.getAudioContext();
+      const audioBuffer = await ctx.decodeAudioData(audioData);
+      const float32Data = audioBuffer.getChannelData(0);
+
+      return this.play(float32Data, audioBuffer.sampleRate, {
+        onStart: (duration) => {
+          if (options?.onStart) {
+            options.onStart(transcript, duration);
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('AUDIO_PLAYER', `Failed to play from url: ${url}`, error);
+      // We don't want to reject the promise here, as it's not a critical error.
+      // We'll just log it and move on.
+    }
   }
 
   private async processQueue() {
@@ -86,6 +132,11 @@ export class AudioPlayer {
       source.buffer = buffer;
       source.connect(ctx.destination);
       this.currentSource = source;
+
+      if (item.onStart) {
+        logger.debug('AUDIO_PLAYER', `Triggering onStart callback with duration: ${item.duration.toFixed(2)}s`);
+        item.onStart(item.duration);
+      }
 
       source.onended = () => {
         // Cleanup: Disconnect source to allow GC

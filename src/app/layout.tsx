@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ServiceWorkerRegister } from "@/shared/components/system/service-worker-register";
+import { ServiceWorkerRegister } from "@/shared/components/ServiceWorkerRegister";
 import { ErrorBoundary } from "@/shared/components/error-boundary";
 
 const geistSans = Geist({
@@ -19,7 +19,6 @@ import type { Viewport } from "next";
 export const metadata: Metadata = {
   title: "Aether | Empathetic Voice Companion",
   description: "A safe, non-judgmental space to express your feelings through natural voice conversation.",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -28,6 +27,7 @@ export const metadata: Metadata = {
   formatDetection: {
     telephone: false,
   },
+  manifest: "/api/manifest",
 };
 
 export const viewport: Viewport = {
@@ -48,6 +48,7 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://huggingface.co" />
         <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+        <link rel="apple-touch-startup-image" href="/api/apple-splash" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overscroll-none select-none touch-manipulation`}
