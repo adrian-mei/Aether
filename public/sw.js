@@ -3,11 +3,11 @@ const MODEL_CACHE_NAME = 'aether-models-v1';
 
 const URLS_TO_CACHE = [
   '/',
-  '/manifest.json',
+  '/api/manifest', // Use the API route for the manifest
   '/icons/file.svg',
   '/icons/globe.svg',
-  '/icons/window.svg',
-  '/workers/embedding.worker.js'
+  '/icons/window.svg'
+  // Removed '/workers/embedding.worker.js' as it does not exist
 ];
 
 // Domains that host large model files or libraries

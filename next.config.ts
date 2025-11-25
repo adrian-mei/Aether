@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/backend/:path*',
-        destination: 'http://159.54.180.60:3002/:path*',
+        destination: 'https://talks-dresses-incidents-bars.trycloudflare.com/:path*',
       },
     ]
   },
