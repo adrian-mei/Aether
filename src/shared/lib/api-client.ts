@@ -43,8 +43,8 @@ export class ApiClient {
     // Return mock response based on endpoint
     let responseData = {};
     
-    if (endpoint.includes('/session')) {
-      responseData = { status: 'connected', id: 'mock-session-123', mode: 'mock' };
+    if (endpoint.includes('/session/start')) {
+      responseData = { status: 'connected', sessionId: 'mock-session-123', mode: 'mock' };
     } else if (endpoint.includes('/voice/state')) {
       responseData = { success: true };
     }

@@ -1,23 +1,22 @@
 import React from 'react';
-import { Bubbles } from './Bubbles';
+import { getOrbGradient, getOrbShadow } from './orb-styles';
+import { UIVoiceState, EmotionalTone } from './Orb.logic';
 
 interface OrbLiquidFillProps {
-  progress: number | null;
+  state: UIVoiceState;
+  emotionalTone?: EmotionalTone; // Optional for now, can be used for finer color control
 }
 
-export const OrbLiquidFill = ({ progress }: OrbLiquidFillProps) => {
-  if (progress === null || progress >= 100) return null;
+export const OrbLiquidFill = ({ state, emotionalTone = 'calm' }: OrbLiquidFillProps) => {
+  const gradientClass = getOrbGradient(state, emotionalTone);
+  const shadowClass = getOrbShadow(state);
 
   return (
     <div 
-        className="absolute bottom-0 left-0 right-0 bg-teal-400/40 backdrop-blur-sm transition-all duration-300 ease-out flex items-center justify-center overflow-hidden z-10"
-        style={{ height: `${progress}%` }}
+        className={`absolute inset-0 rounded-full bg-gradient-to-br ${gradientClass} ${shadowClass} transition-all duration-700 ease-in-out`}
     >
-        <div className="w-full h-[2px] bg-teal-300/70 absolute top-0 animate-pulse" />
-        {/* Bubbles effect */}
-        <div className="absolute inset-0">
-              <Bubbles />
-        </div>
+        {/* Internal highlighting for liquid effect */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-50 rounded-full" />
     </div>
   );
 };
