@@ -78,6 +78,11 @@ export function useRealtimeSession({
       recognition.lang = 'en-US';
 
       recognition.onresult = (event: any) => {
+        // STRICT TURN-TAKING: Only process STT if we are in 'listening' state.
+        if (currentVoiceStateRef.current !== 'listening') {
+             return;
+        }
+
         // Handle browser-specific reset of results array
         if (turnStartIndexRef.current > event.resultIndex || turnStartIndexRef.current >= event.results.length) {
             turnStartIndexRef.current = 0;
@@ -139,6 +144,12 @@ export function useRealtimeSession({
       processorRef.current = processor;
 
       processor.onaudioprocess = (e) => {
+        // STRICT TURN-TAKING: Only process audio if we are in 'listening' state.
+        // This effectively mutes the microphone during 'idle', 'processing', and 'speaking' states.
+        if (currentVoiceStateRef.current !== 'listening') {
+             return;
+        }
+
         const inputData = e.inputBuffer.getChannelData(0);
         
         // 1. Calculate RMS for VAD
@@ -154,12 +165,6 @@ export function useRealtimeSession({
             isSpeakingRef.current = true;
             logger.info('VAD', 'Speech Detected');
 
-            // Interrupt detection: If AI is speaking, stop playback
-            if (currentVoiceStateRef.current === 'speaking') {
-              logger.info('VAD', 'Interrupting AI speech');
-              audioPlayer.stop();
-            }
-
             // Clear text immediately for new turn (Visual Responsiveness)
             setTranscript('');
             setActiveText('');
@@ -167,8 +172,8 @@ export function useRealtimeSession({
             isNewTurnRef.current = true;
 
             sendEvent({ type: 'user.started_speaking' });
-            setVoiceState('listening');
-            currentVoiceStateRef.current = 'listening';
+            // State is already 'listening', so no need to set it, but good for consistency
+            // setVoiceState('listening'); 
           }
 
           // Clear silence timeout if speaking

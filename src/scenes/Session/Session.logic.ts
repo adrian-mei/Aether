@@ -100,7 +100,7 @@ export function useSessionManager() {
 
     try {
       const clientId = getOrCreateClientId();
-      const response = await ApiClient.post('/session/start', {
+      const response = await ApiClient.post('/session', {
         timestamp: Date.now(),
         client: 'web-ui',
         clientId,
@@ -119,8 +119,8 @@ export function useSessionManager() {
       if (response.ok) {
         const data = await response.json();
         setStatus('connected');
-        setSessionId(data.sessionId);
-        logger.logConversation(ConversationEvents.SESSION_CONNECTED, data.sessionId);
+        setSessionId(data.id);
+        logger.logConversation(ConversationEvents.SESSION_CONNECTED, data.id);
       } else {
         // Log the error and update status without throwing
         logger.error('APP', 'Failed to start session', await response.text());

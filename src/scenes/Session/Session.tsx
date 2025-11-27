@@ -106,11 +106,7 @@ export const AetherUI = () => {
   };
 
   return (
-    // Updated Container: 
-    // - Removed hardcoded gradient (uses global theme)
-    // - Added safe-area padding (pt-safe, pb-safe)
-    // - Uses flex-col for full height layout
-    <div className="relative w-full h-[100dvh] overflow-hidden touch-none pt-safe pb-safe">
+    <div className="relative w-full h-[100dvh] overflow-hidden bg-gradient-to-br from-green-950 via-emerald-950 to-teal-950 touch-none pt-safe pb-safe">
       <LandscapeWarning />
       <IOSInstallPrompt />
       <MobileSupportNotice />
@@ -122,16 +118,16 @@ export const AetherUI = () => {
         onBypass={actions.verifyAccessCode}
       />
 
-      {/* Deep gradient overlay for depth (Transparent to Black/20) */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10 pointer-events-none" />
+      {/* Deep gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none" />
       
       <BackgroundOrbs 
         uiVoiceState={uiVoiceState}
         breatheIntensity={breatheIntensity}
       />
 
-      {/* Noise texture overlay */}
-      <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay pointer-events-none">
+      {/* Noise texture overlay - Reduced opacity for cleaner glass look */}
+      <div className="absolute inset-0 opacity-[0.02] mix-blend-overlay pointer-events-none">
         <svg width="100%" height="100%">
           <filter id="noise">
             <feTurbulence baseFrequency="0.9" numOctaves="4" />
@@ -159,8 +155,8 @@ export const AetherUI = () => {
           </>
         )}
 
-        {/* Central Orb & Status */}
-        <div className={`flex flex-col items-center justify-center space-y-8 md:space-y-10 pt-8 md:pt-16 w-full transition-opacity duration-500 ${uiVoiceState === 'listening' ? 'opacity-50' : ''}`}>
+        {/* Central Orb Container */}
+        <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
             <OrbContainer 
                 uiVoiceState={uiVoiceState}
                 sessionStatus={state.status}
@@ -168,14 +164,14 @@ export const AetherUI = () => {
                 emotionalTone={emotionalTone}
                 onInteraction={handleInteraction}
             />
-        </div>
 
-        <StatusDisplay 
-            uiVoiceState={uiVoiceState}
-            visualStatus={visualStatus}
-            currentAssistantMessage={state.currentAssistantMessage}
-            turnCount={state.turnCount}
-        />
+            <StatusDisplay 
+                uiVoiceState={uiVoiceState}
+                visualStatus={visualStatus}
+                currentAssistantMessage={state.currentAssistantMessage}
+                turnCount={state.turnCount}
+            />
+        </div>
 
         <Footer emotionalTone={emotionalTone} uiVoiceState={uiVoiceState} />
       </div>

@@ -1,78 +1,124 @@
 'use client';
 
-import { useMemo } from 'react';
+import React, { useRef } from 'react';
 import { PermissionStatus } from '@/shared/utils/voice/permissions';
 import { SessionStatus } from '../Session.logic';
 import { UIVoiceState, EmotionalTone } from './Orb.logic';
-import { OrbLiquidFill } from './orb-liquid-fill';
+import { getOrbGradient, getOrbShadow } from './orb-styles';
 import { OrbParticles } from './orb-particles';
+import { OrbLiquidFill } from './orb-liquid-fill';
 import { OrbStatusOverlay } from './orb-status-overlay';
-import { ORB_STYLES } from './orb-styles';
 
 export interface OrbContainerProps {
   uiVoiceState: UIVoiceState;
   sessionStatus: SessionStatus;
   permissionStatus: PermissionStatus;
   emotionalTone: EmotionalTone;
+  downloadProgress?: number | null;
+  bootStatus?: string;
   onInteraction: () => void;
 }
 
-export function OrbContainer({
+export const OrbContainer = ({
   uiVoiceState,
   sessionStatus,
   permissionStatus,
   emotionalTone,
-  onInteraction
-}: OrbContainerProps) {
-  
-  // Dynamic scaling based on state
-  const scale = useMemo(() => {
-    switch (uiVoiceState) {
-      case 'listening': return 1.05;
-      case 'speaking': return 1.1;
-      case 'processing': return 0.95;
-      default: return 1;
-    }
-  }, [uiVoiceState]);
+  downloadProgress = null,
+  bootStatus,
+  onInteraction,
+}: OrbContainerProps) => {
+  const orbRef = useRef<HTMLButtonElement>(null);
 
-  // Determine active color scheme
-  const currentStyle = ORB_STYLES[emotionalTone];
+  const handleInteraction = () => {
+    // Haptic feedback
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(15);
+    }
+    onInteraction();
+  };
 
   return (
-    <div 
-      role="button"
-      aria-label="Start Session"
-      tabIndex={0}
-      className={`relative w-64 h-64 md:w-80 md:h-80 cursor-pointer touch-manipulation transition-transform duration-700 ease-spring focus:outline-none focus:ring-4 focus:ring-white/20 rounded-full ${uiVoiceState === 'speaking' ? 'animate-breathe' : ''}`}
-      style={{ transform: `scale(${scale})` }}
-      onClick={onInteraction}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          onInteraction();
-        }
-      }}
-    >
-      {/* 1. Core Liquid Fill (Base) */}
-      <OrbLiquidFill 
-        state={uiVoiceState}
-        emotionalTone={emotionalTone}
-      />
+    <div className="flex flex-col items-center justify-center space-y-8 md:space-y-10 -mt-8 md:-mt-16">
+      <div className="relative">
+        {/* Outer pulsing rings */}
+        {uiVoiceState === 'speaking' && (
+          <>
+            <div className="absolute inset-0 -m-6 md:-m-8 rounded-full bg-gradient-radial from-lime-500/20 to-transparent animate-pulse-slow pointer-events-none" />
+            <div className="absolute inset-0 -m-12 md:-m-16 rounded-full bg-gradient-radial from-emerald-500/10 to-transparent animate-pulse-slower pointer-events-none" />
+          </>
+        )}
+        
+        {/* Listening ripples */}
+        {uiVoiceState === 'listening' && (
+          <div className="absolute inset-0 -m-4 pointer-events-none">
+            <div className="absolute inset-0 rounded-full border border-emerald-400/30 animate-ripple" />
+            <div className="absolute inset-0 rounded-full border border-teal-400/20 animate-ripple-delayed" />
+          </div>
+        )}
 
-      {/* 2. Particle System (Atmosphere) */}
-      <OrbParticles 
-        color={currentStyle.particles} 
-        intensity={uiVoiceState === 'speaking' ? 2 : 1}
-      />
+        {/* Processing particles */}
+        {uiVoiceState === 'processing' && <OrbParticles />}
+        
+        {/* Main Interactive Orb */}
+        <button
+          ref={orbRef}
+          onClick={handleInteraction}
+          className={`
+            relative w-[35vmin] h-[35vmin] max-w-[256px] max-h-[256px] min-w-[200px] min-h-[200px] rounded-full
+            bg-gradient-to-br ${getOrbGradient(uiVoiceState, emotionalTone)}
+            ${getOrbShadow(uiVoiceState)}
+            backdrop-blur-2xl
+            border border-emerald-400/20
+            transition-all duration-1000 ease-out
+            hover:scale-105 active:scale-95
+            cursor-pointer
+            overflow-hidden
+            group
+          `}
+          style={{
+            transform: `scale(${uiVoiceState === 'listening' ? 1.08 : uiVoiceState === 'speaking' ? 1.05 : 1})`,
+          }}
+          aria-label={(sessionStatus === 'idle' || sessionStatus === 'connecting') ? "Start Session" : "Toggle Listening"}
+        >
+          {/* Inner gradient layers for depth */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-emerald-300/10 to-transparent opacity-50" />
+          <div className="absolute inset-0 bg-gradient-radial from-center from-white/5 to-transparent" />
+          
+          {/* Liquid Fill Animation */}
+          <OrbLiquidFill progress={downloadProgress} />
 
-      {/* 3. Status/Error Overlays (Top Layer) */}
-      <OrbStatusOverlay 
-        sessionStatus={sessionStatus}
-        permissionStatus={permissionStatus}
-      />
-      
-      {/* 4. Glass Reflection/Glare (Static) */}
-      <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/20 to-transparent opacity-40 pointer-events-none" />
-      <div className="absolute top-4 left-8 w-16 h-8 bg-white/30 rounded-full blur-xl pointer-events-none" />
+          {/* Status Overlay */}
+          <OrbStatusOverlay 
+              sessionStatus={sessionStatus}
+              permissionStatus={permissionStatus}
+              downloadProgress={downloadProgress}
+              bootStatus={bootStatus}
+          />
+
+          {/* Animated inner core */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className={`
+              relative w-20 h-20 rounded-full
+              transition-all duration-700
+              ${uiVoiceState === 'listening' ? 'bg-gradient-to-br from-emerald-300/80 to-teal-400/80 scale-110' : 
+                uiVoiceState === 'speaking' ? 'bg-gradient-to-br from-lime-300/80 to-emerald-400/80 scale-125' :
+                uiVoiceState === 'processing' ? 'bg-gradient-to-br from-teal-300/70 to-emerald-400/70 scale-90 animate-pulse' :
+                'bg-gradient-to-br from-emerald-400/60 to-green-500/60'}
+              shadow-[0_0_40px_rgba(52,211,153,0.5)]
+              animate-breathe
+            `}>
+              {/* Inner light point */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-6 h-6 bg-white/30 rounded-full blur-sm animate-glow" />
+              </div>
+            </div>
+          </div>
+
+          {/* Hover effect overlay */}
+          <div className="absolute inset-0 bg-gradient-radial from-emerald-300/0 via-emerald-400/0 to-emerald-500/0 group-hover:from-emerald-300/10 group-hover:via-emerald-400/5 group-hover:to-emerald-500/0 transition-all duration-500" />
+        </button>
+      </div>
     </div>
   );
-}
+};
