@@ -6,8 +6,8 @@
 export const Env = {
   // Public (Client-side)
   // Using Cloudflare Tunnel for secure connection
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://talks-dresses-incidents-bars.trycloudflare.com',
-  NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'wss://talks-dresses-incidents-bars.trycloudflare.com',
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002',
+  NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3002',
   NEXT_PUBLIC_ENABLE_LOGGING: process.env.NEXT_PUBLIC_ENABLE_LOGGING !== 'false', // Default true
   NEXT_PUBLIC_LOG_LEVEL: process.env.NEXT_PUBLIC_LOG_LEVEL || (process.env.NODE_ENV === 'development' ? 'debug' : 'info'),
   NEXT_PUBLIC_ENABLE_REMOTE_LOGGING: process.env.NEXT_PUBLIC_ENABLE_REMOTE_LOGGING === 'true',

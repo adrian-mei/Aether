@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { logger } from '@/shared/lib/logger';
+import { ApiClient } from '@/shared/lib/api-client';
 
 const MAX_INTERACTIONS = 10;
 const RESET_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
@@ -92,20 +93,25 @@ export function useSessionAccess() {
   };
 
   const verifyAccessCode = async (code: string): Promise<boolean> => {
-    // Mock verification for UI-only build
-    // In production, this should validate against a hash or backend
-    const isValid = code.length > 0; 
-    
-    if (isValid) {
-      setIsUnlocked(true);
-      setAccessCode(code); // Store in memory only
-      if (isLimitReached) {
-          setIsLimitReached(false);
+    try {
+      const response = await ApiClient.post('/access/validate', { code });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.valid) {
+          setIsUnlocked(true);
+          setAccessCode(code); // Store in memory only
+          if (isLimitReached) {
+              setIsLimitReached(false);
+          }
+          logger.info('SESSION', 'Access code verified successfully');
+          return true;
+        }
       }
-      logger.info('SESSION', 'Access code verified successfully (Mock)');
-      return true;
+      return false;
+    } catch (error) {
+      logger.error('SESSION', 'Failed to verify access code', error);
+      return false;
     }
-    return false;
   };
 
   const resetInteractions = () => {
