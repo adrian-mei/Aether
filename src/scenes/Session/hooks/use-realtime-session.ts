@@ -40,6 +40,7 @@ export function useRealtimeSession({
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef(false);
+  const micStartTimeRef = useRef<number>(0);
   const currentVoiceStateRef = useRef<VoiceState>('idle');
   const recognitionRef = useRef<any>(null);
   const turnStartIndexRef = useRef<number>(0);
@@ -136,6 +137,7 @@ export function useRealtimeSession({
       } });
       
       streamRef.current = stream;
+      micStartTimeRef.current = Date.now();
       const ctx = new window.AudioContext({ sampleRate: 16000 }); // Try to match
       audioContextRef.current = ctx;
 
@@ -144,6 +146,11 @@ export function useRealtimeSession({
       processorRef.current = processor;
 
       processor.onaudioprocess = (e) => {
+        // IGNORE STARTUP POP: Ignore audio for the first 1s after mic start
+        if (Date.now() - micStartTimeRef.current < 1000) {
+            return;
+        }
+
         // STRICT TURN-TAKING: Only process audio if we are in 'listening' state.
         // This effectively mutes the microphone during 'idle', 'processing', and 'speaking' states.
         if (currentVoiceStateRef.current !== 'listening') {
