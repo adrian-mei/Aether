@@ -19,7 +19,7 @@ interface UseRealtimeSessionProps {
 
 // VAD Constants
 const VAD_THRESHOLD = 0.02; // RMS Threshold
-const SILENCE_DURATION = 800; // ms to wait before committing
+const SILENCE_DURATION = 400; // ms to wait before committing
 const AUDIO_TIMEOUT_MS = 3000; // 3s timeout for audio promise
 
 export function useRealtimeSession({
