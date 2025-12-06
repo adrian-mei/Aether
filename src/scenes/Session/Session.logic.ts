@@ -100,7 +100,7 @@ export function useSessionManager() {
 
     try {
       const clientId = getOrCreateClientId();
-      const response = await ApiClient.post('/session/start', {
+      const response = await ApiClient.post('/session', {
         timestamp: Date.now(),
         client: 'web-ui',
         clientId,

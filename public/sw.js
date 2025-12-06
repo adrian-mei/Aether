@@ -89,6 +89,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Ignore non-GET requests
+  if (request.method !== 'GET') {
+    return;
+  }
+
   // Handle App Shell & Static Assets (Stale-While-Revalidate)
   event.respondWith(
     caches.match(request).then((cachedResponse) => {

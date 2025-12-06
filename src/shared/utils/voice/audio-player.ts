@@ -193,7 +193,13 @@ export class AudioPlayer {
       this.currentSource = null;
     }
 
-    // Clear queue
+    // Clear queue and resolve pending promises to prevent hanging
+    this.queue.forEach(item => {
+        // We resolve instead of reject to avoid unhandled promise rejections in the UI
+        // or we could reject with a specific 'AbortError'.
+        // For Aether's flow, resolving quickly is safer.
+        item.resolve(); 
+    });
     this.queue = [];
     this.isPlaying = false;
 
