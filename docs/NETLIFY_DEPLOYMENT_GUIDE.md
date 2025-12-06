@@ -31,10 +31,21 @@ This is a critical step to ensure the frontend can communicate with your backend
 
 1.  **Go to Site Settings**: After creating the site, navigate to your site's dashboard and click on "Site settings."
 2.  **Environment Variables**: In the side menu, go to "Build & deploy" > "Environment."
-3.  **Add a New Variable**: Click "Edit variables" and add a new variable with the following details:
+3.  **Add New Variables**: Click "Edit variables" and add the following variables (ensure they are applied to **All scopes**):
     -   **Key**: `NEXT_PUBLIC_API_URL`
-    -   **Value**: `http://159.54.180.60:3002`
-4.  **Save**: Click "Save" to add the environment variable.
+    -   **Value**: `https://api.cogito.cv`
+    -   **Key**: `NEXT_PUBLIC_WS_URL`
+    -   **Value**: `wss://api.cogito.cv`
+
+    **Optional Variables:**
+    -   **Key**: `NEXT_PUBLIC_ENABLE_LOGGING`
+        -   **Value**: `true` or `false` (Default: `true`)
+    -   **Key**: `NEXT_PUBLIC_LOG_LEVEL`
+        -   **Value**: `debug`, `info`, `warn`, or `error` (Default: `info` in production)
+    -   **Key**: `NEXT_PUBLIC_ACCESS_CODE_HASH`
+        -   **Value**: (SHA-256 hash of the access code if you want to restrict access)
+
+4.  **Save**: Click "Save" to add the environment variables.
 
 ## Step 4: Deploy Your Site
 
@@ -46,6 +57,6 @@ This is a critical step to ensure the frontend can communicate with your backend
 
 1.  **Open Your Site**: Once the deployment is complete, Netlify will provide you with a URL for your live site. Click on it to open it in your browser.
 2.  **Check for Errors**: Open the browser's developer console and check for any errors.
-3.  **Test API Communication**: The application should be communicating with the backend at `http://159.54.180.60:3002`. You can verify this by checking the network requests in the developer console.
+3.  **Test API Communication**: The application should be communicating with the backend at `https://api.cogito.cv`. You can verify this by checking the network requests in the developer console.
 
 Congratulations! Your Aether frontend is now deployed on Netlify.
